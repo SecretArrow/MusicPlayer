@@ -1,0 +1,170 @@
+name: CI — Desktop native app (Windows + Linux + macOS)
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+    paths:
+      - 'desktop/**'
+      - 'shared/audio-core/**'
+      - '.github/workflows/ci-desktop.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'desktop/**'
+      - 'shared/audio-core/**'
+      - '.github/workflows/ci-desktop.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build & Test (${{ matrix.os }} / ${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: musicplayer-desktop-x86_64-windows
+            archive_ext: zip
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: musicplayer-desktop-x86_64-linux
+            archive_ext: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: musicplayer-desktop-aarch64-macos
+            archive_ext: tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: rustfmt, clippy
+
+      - name: Install Linux deps (audio/graphics)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev pkg-config libfreetype6-dev libexpat1-dev
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "desktop -> target"
+
+      - name: Format check
+        working-directory: desktop
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        working-directory: desktop
+        run: cargo clippy --target ${{ matrix.target }} --all-targets -- -D warnings
+
+      - name: Test shared audio-core
+        working-directory: shared/audio-core
+        run: cargo test --no-default-features --features decoder,metadata,effects --no-fail-fast
+
+      - name: Test desktop crate
+        working-directory: desktop
+        run: cargo test --target ${{ matrix.target }} --no-fail-fast
+
+      - name: Build desktop release
+        working-directory: desktop
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package portable (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $staging = "musicplayer-desktop-windows-x64"
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          Copy-Item "desktop/target/x86_64-pc-windows-msvc/release/musicplayer-desktop.exe" "$staging/"
+          Copy-Item -Recurse "desktop/assets/*" "$staging/"
+          Copy-Item "README.md" "$staging/"
+          Compress-Archive -Path "$staging/*" -DestinationPath "${{ matrix.artifact_name }}.zip"
+
+      - name: Package portable (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          staging="musicplayer-desktop-linux-x64"
+          mkdir -p "$staging"
+          cp "desktop/target/x86_64-unknown-linux-gnu/release/musicplayer-desktop" "$staging/"
+          cp -r desktop/assets/* "$staging/" 2>/dev/null || true
+          cp README.md "$staging/"
+          tar czf ${{ matrix.artifact_name }}.tar.gz -C "$staging" .
+
+      - name: Package portable (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          staging="musicplayer-desktop-macos-arm64"
+          mkdir -p "$staging"
+          cp "desktop/target/aarch64-apple-darwin/release/musicplayer-desktop" "$staging/"
+          cp -r desktop/assets/* "$staging/" 2>/dev/null || true
+          cp README.md "$staging/"
+          tar czf ${{ matrix.artifact_name }}.tar.gz -C "$staging" .
+
+      - name: Wine smoke test (Windows binary on Linux runner)
+        if: matrix.os == 'ubuntu-latest'
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y wine
+          # Cross-build the Windows binary so we can smoke-test it under Wine.
+          rustup target add x86_64-pc-windows-gnu
+          cd desktop && cargo build --release --target x86_64-pc-windows-gnu || true
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            ${{ matrix.artifact_name }}.zip
+            ${{ matrix.artifact_name }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/musicplayer-desktop-x86_64-windows/*.zip
+            artifacts/musicplayer-desktop-x86_64-linux/*.tar.gz
+            artifacts/musicplayer-desktop-aarch64-macos/*.tar.gz
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+          generate_release_notes: true
+          body: |
+            # MusicPlayer Desktop ${{ github.ref_name }}
+
+            Native desktop music player for Windows, Linux, and macOS.
+            Built from commit ${{ github.sha }}.
+
+            ## Downloads
+            - **Windows x64**: `musicplayer-desktop-x86_64-windows.zip` — extract and run `musicplayer-desktop.exe`
+            - **Linux x64**: `musicplayer-desktop-x86_64-linux.tar.gz` — extract and `./musicplayer-desktop`
+            - **macOS arm64**: `musicplayer-desktop-aarch64-macos.tar.gz` — extract and `./musicplayer-desktop`
+
+            See `docs/ARCHITECTURE.md` for technical details.

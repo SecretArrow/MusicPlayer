@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = [
+    "shared/audio-core",
+    "android/rust",
+    "desktop",
+]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.74"
+license = "MIT"
+repository = "https://github.com/SecretArrow/MusicPlayer"
+authors = ["SecretArrow"]
+
+[workspace.dependencies]
+audio-core = { path = "shared/audio-core" }

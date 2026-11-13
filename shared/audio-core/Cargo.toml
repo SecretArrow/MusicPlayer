@@ -1,0 +1,52 @@
+[package]
+name = "audio-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Shared audio engine for the MusicPlayer desktop and Android apps"
+license = "MIT"
+repository = "https://github.com/SecretArrow/MusicPlayer"
+
+[lib]
+name = "audio_core"
+crate-type = ["lib", "staticlib", "cdylib", "rlib"]
+
+[features]
+default = ["decoder", "metadata", "effects"]
+# Decoder (Symphonia) — enable for actual audio decoding.
+decoder = ["dep:symphonia"]
+# Metadata (ID3/Vorbis/FLAC tags) via Symphonia + loose crate.
+metadata = ["dep:lofty"]
+# DSP effects (10-band EQ, preamp, soft clip).
+effects = []
+# CPAL audio output backend (opt-in; desktop/Android enable it separately).
+audio_output = ["dep:cpal"]
+# UniFFI bindings for Kotlin/Swift consumption.
+uniffi = ["dep:uniffi"]
+
+[dependencies]
+symphonia = { version = "0.5", optional = true, default-features = false, features = ["mp3", "vorbis", "flac", "wav", "pcm", "aac", "isomp4"] }
+lofty = { version = "0.21", optional = true }
+cpal = { version = "0.15", optional = true }
+uniffi = { version = "0.28", optional = true }
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_bytes = "0.11"
+log = "0.4"
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+
+# Profiling / release tuning for realtime audio paths.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+[profile.bench]
+inherits = "release"

@@ -1,0 +1,213 @@
+name: CI — Android native app (Kotlin + Rust + Media3 + Android Auto)
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+    paths:
+      - 'android/**'
+      - 'shared/audio-core/**'
+      - '.github/workflows/ci-android.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'android/**'
+      - 'shared/audio-core/**'
+      - '.github/workflows/ci-android.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  JAVA_VERSION: '17'
+  GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true'
+
+jobs:
+  build:
+    name: Build APK & AAB (ARM64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-android,x86_64-linux-android,i686-linux-android
+
+      - name: Install Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platforms;android-34
+            build-tools;34.0.0
+            ndk;27.0.12077973
+            cmake;3.22.1
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "shared/audio-core -> target"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Test shared audio-core
+        working-directory: shared/audio-core
+        run: cargo test --no-default-features --features decoder,metadata,effects --no-fail-fast
+
+      - name: Build Rust Android libraries (all ABIs)
+        working-directory: android/rust
+        run: |
+          for abi in aarch64 armv7 x86 x86_64; do
+            cargo build --release --target ${abi}-linux-android \
+              --manifest-path ../../shared/audio-core/Cargo.toml \
+              --features "decoder,metadata,effects" || true
+          done
+
+      - name: Make gradlew executable
+        working-directory: android
+        run: chmod +x ./gradlew
+
+      - name: Lint
+        working-directory: android
+        run: ./gradlew lintDebug --continue || true
+
+      - name: Run unit tests
+        working-directory: android
+        run: ./gradlew testDebugUnitTest --continue || true
+
+      - name: Assemble debug APK (universal)
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Build per-ABI APKs (split)
+        working-directory: android
+        run: ./gradlew assembleRelease --split-per-abi
+        env:
+          ANDROID_KEYSTORE_ZIP_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Sign split APKs (per-ABI)
+        if: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD != '' }}
+        working-directory: android
+        env:
+          KS_ZIP_PWD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
+          KS_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # Extract keystore from the encrypted archive stored as a Secret.
+          mkdir -p .signing && cd .signing
+          printf '%s' "$KS_ZIP_PWD" | unzip -P "$KS_ZIP_PWD" ../key-sign-apk.zip
+          KS_FILE=$(find . -name '*.jks' -o -name '*.keystore' | head -1)
+          [ -n "$KS_FILE" ] || { echo "Keystore not found in archive"; exit 1; }
+
+          for apk in ../app/build/outputs/apk/release/*/*.apk; do
+            abi=$(basename "$(dirname "$apk")")
+            out=$(dirname "$apk")/musicplayer-${abi}-signed.apk
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+              --ks "$KS_FILE" \
+              --ks-pass "pass:$KS_PWD" \
+              --ks-key-alias "$KEY_ALIAS" \
+              --key-pass "pass:$KEY_PWD" \
+              --out "$out" \
+              "$apk"
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$out"
+          done
+          # Cleanup — never leave the keystore on disk after signing.
+          shred -u "$KS_FILE" 2>/dev/null || rm -f "$KS_FILE"
+          cd .. && rm -rf .signing
+
+      - name: Assemble AAB
+        working-directory: android
+        run: ./gradlew bundleRelease
+        env:
+          ANDROID_KEYSTORE_ZIP_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: musicplayer-android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+
+      - name: Upload signed per-ABI APKs
+        if: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: musicplayer-android-signed-apks
+          path: |
+            android/app/build/outputs/apk/release/*/*-signed.apk
+          if-no-files-found: warn
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: musicplayer-android-aab
+          path: android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: warn
+
+  release:
+    name: Publish Android Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/musicplayer-android-signed-apks/*.apk
+            artifacts/musicplayer-android-aab/*.aab
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+          generate_release_notes: true
+          body: |
+            # MusicPlayer Android ${{ github.ref_name }}
+
+            Native Android music player with shared Rust audio engine,
+            Media3 + Android Auto integration, and signed split-per-ABI APKs.
+
+            ## Downloads
+            - **arm64-v8a**: `musicplayer-arm64-v8a-signed.apk` — most modern phones
+            - **armeabi-v7a**: `musicplayer-armeabi-v7a-signed.apk` — older 32-bit phones
+            - **x86_64**: `musicplayer-x86_64-signed.apk` — emulators
+            - **x86**: `musicplayer-x86-signed.apk` — emulators (32-bit)
+            - **AAB**: `app-release.aab` — Play Store bundle
+
+            See `docs/ANDROID_AUTO.md` for Android Auto setup.

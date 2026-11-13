@@ -1,0 +1,80 @@
+namespace musicplayer {
+    /// Initialize the audio engine.
+    fn init_engine();
+    /// Get the library version string.
+    fn version() -> string;
+};
+
+/// A track in the library.
+dictionary TrackInfo {
+    string id;
+    string title;
+    string artist;
+    string album;
+    string genre;
+    u32 year;
+    u32 duration_secs;
+    string path;
+};
+
+/// Playback state enum.
+enum PlaybackState {
+    "Stopped",
+    "Loading",
+    "Playing",
+    "Paused",
+    "Ended",
+};
+
+/// Repeat mode enum.
+enum RepeatMode {
+    "Off",
+    "All",
+    "One",
+};
+
+/// EQ settings.
+dictionary EqSettings {
+    boolean enabled;
+    string preset;
+    f32 preamp_db;
+    sequence<f32> bands;
+};
+
+/// The player interface exposed to Kotlin.
+interface Player {
+    /// Open a file path and start playback.
+    void play_file(string path);
+    /// Pause.
+    void pause();
+    /// Resume.
+    void resume();
+    /// Stop and clear.
+    void stop();
+    /// Seek to position (seconds).
+    void seek(f64 secs);
+    /// Advance to next track.
+    void next();
+    /// Go to previous track.
+    void prev();
+    /// Set volume (0..1).
+    void set_volume(f32 v);
+    /// Get current state.
+    PlaybackState state();
+    /// Get current track ID.
+    string? current_track_id();
+    /// Get current position (seconds).
+    f64 position();
+    /// Get current track duration (seconds).
+    f64 duration();
+    /// Get current EQ settings.
+    EqSettings eq_settings();
+    /// Update EQ settings.
+    void set_eq(EqSettings settings);
+    /// Set repeat mode.
+    void set_repeat(RepeatMode mode);
+    /// Toggle shuffle.
+    void set_shuffle(boolean on);
+    /// Shutdown the engine.
+    void shutdown();
+};

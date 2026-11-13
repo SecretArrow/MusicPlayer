@@ -1,0 +1,27 @@
+[package]
+name = "musicplayer-android-rust"
+version = "0.1.0"
+edition = "2021"
+description = "Rust audio engine bridge for the Android app (UniFFI)"
+license = "MIT"
+repository = "https://github.com/SecretArrow/MusicPlayer"
+
+[lib]
+name = "musicplayer_android"
+crate-type = ["lib", "staticlib", "cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+audio-core = { path = "../../shared/audio-core", features = ["decoder", "metadata", "effects"] }
+uniffi = { version = "0.28", features = ["cli"] }
+parking_lot = "0.12"
+log = "0.4"
+
+[build-dependencies]
+uniffi = { version = "0.28", features = ["build"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
