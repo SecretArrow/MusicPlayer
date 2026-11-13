@@ -77,7 +77,7 @@ export function PlayerControls({
             variant="ghost"
             size="icon"
             onClick={toggleShuffle}
-            className={cn("h-10 w-10 text-zinc-400", shuffle && "text-emerald-400")}
+            className={cn("h-10 w-10 text-zinc-400", shuffle && "text-[color:var(--accent)]")}
           >
             <Shuffle className="h-5 w-5" />
           </Button>
@@ -85,7 +85,7 @@ export function PlayerControls({
             variant="ghost"
             size="icon"
             onClick={prev}
-            className="h-12 w-12 text-white hover:text-emerald-400"
+            className="h-12 w-12 text-white hover:text-[color:var(--accent)]"
           >
             <SkipBack className="h-7 w-7" fill="currentColor" />
           </Button>
@@ -93,7 +93,7 @@ export function PlayerControls({
             variant="ghost"
             size="icon"
             onClick={togglePlay}
-            className="h-16 w-16 rounded-full bg-white text-zinc-900 hover:bg-emerald-400 hover:text-emerald-950"
+            className="h-16 w-16 rounded-full bg-white text-zinc-900 hover:bg-[color:var(--accent)] hover:text-zinc-950"
           >
             {isPlaying ? (
               <Pause className="h-8 w-8" fill="currentColor" />
@@ -105,7 +105,7 @@ export function PlayerControls({
             variant="ghost"
             size="icon"
             onClick={next}
-            className="h-12 w-12 text-white hover:text-emerald-400"
+            className="h-12 w-12 text-white hover:text-[color:var(--accent)]"
           >
             <SkipForward className="h-7 w-7" fill="currentColor" />
           </Button>
@@ -113,7 +113,7 @@ export function PlayerControls({
             variant="ghost"
             size="icon"
             onClick={cycleRepeat}
-            className={cn("h-10 w-10 text-zinc-400", repeat !== "off" && "text-emerald-400")}
+            className={cn("h-10 w-10 text-zinc-400", repeat !== "off" && "text-[color:var(--accent)]")}
           >
             {(() => {
               const Icon = repeatIcon[repeat];
@@ -146,7 +146,7 @@ export function PlayerControls({
             variant="ghost"
             size="sm"
             onClick={() => track && toggleLike(track.id)}
-            className={cn("gap-1.5 text-xs", isLiked ? "text-emerald-400" : "text-zinc-400")}
+            className={cn("gap-1.5 text-xs", isLiked ? "text-[color:var(--accent)]" : "text-zinc-400")}
           >
             <Heart className={cn("h-4 w-4", isLiked && "fill-current")} /> {isLiked ? "Liked" : "Like"}
           </Button>
@@ -165,7 +165,7 @@ export function PlayerControls({
           variant="ghost"
           size="icon"
           onClick={toggleShuffle}
-          className={cn("h-8 w-8 text-zinc-400", shuffle && "text-emerald-400")}
+          className={cn("h-8 w-8 text-zinc-400", shuffle && "text-[color:var(--accent)]")}
           title="Shuffle"
         >
           <Shuffle className="h-4 w-4" />
@@ -183,7 +183,7 @@ export function PlayerControls({
           variant="default"
           size="icon"
           onClick={togglePlay}
-          className="h-10 w-10 rounded-full bg-white text-zinc-900 hover:scale-105 hover:bg-emerald-400 hover:text-emerald-950"
+          className="h-10 w-10 rounded-full bg-white text-zinc-900 hover:scale-105 hover:bg-[color:var(--accent)] hover:text-zinc-950"
           title={isPlaying ? "Pause" : "Play"}
         >
           {isPlaying ? (
@@ -205,7 +205,7 @@ export function PlayerControls({
           variant="ghost"
           size="icon"
           onClick={cycleRepeat}
-          className={cn("h-8 w-8 text-zinc-400", repeat !== "off" && "text-emerald-400")}
+          className={cn("h-8 w-8 text-zinc-400", repeat !== "off" && "text-[color:var(--accent)]")}
           title={`Repeat: ${repeat}`}
         >
           {(() => {
@@ -255,7 +255,7 @@ export function PlayerRightControls({
         variant="ghost"
         size="icon"
         onClick={() => track && toggleLike(track.id)}
-        className={cn("h-8 w-8", isLiked ? "text-emerald-400" : "text-zinc-400 hover:text-white")}
+        className={cn("h-8 w-8", isLiked ? "text-[color:var(--accent)]" : "text-zinc-400 hover:text-white")}
         title={isLiked ? "Remove from Liked" : "Add to Liked"}
       >
         <Heart className={cn("h-4 w-4", isLiked && "fill-current")} />
