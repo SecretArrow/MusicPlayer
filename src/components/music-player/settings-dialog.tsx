@@ -21,8 +21,9 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { usePlayerStore } from "@/store/player-store";
+import { usePlayerStore, type SettingsTab } from "@/store/player-store";
 import { accentPresets } from "@/data/music";
+import { ThemePicker } from "./theme-picker";
 
 type AudioQuality = "low" | "high" | "lossless";
 type VisualizerStyle = "bars" | "wave" | "off";
@@ -60,6 +61,8 @@ function SettingsRow({
 export function SettingsDialog() {
   const showSettings = usePlayerStore((s) => s.showSettings);
   const setShowSettings = usePlayerStore((s) => s.setShowSettings);
+  const settingsTab = usePlayerStore((s) => s.settingsTab);
+  const setSettingsTab = usePlayerStore((s) => s.setSettingsTab);
   const audioQuality = usePlayerStore((s) => s.audioQuality);
   const setAudioQuality = usePlayerStore((s) => s.setAudioQuality);
   const crossfade = usePlayerStore((s) => s.crossfade);
@@ -75,7 +78,7 @@ export function SettingsDialog() {
 
   return (
     <Dialog open={showSettings} onOpenChange={setShowSettings}>
-      <DialogContent className="max-w-lg border-white/10 bg-zinc-900 text-zinc-100">
+      <DialogContent className="max-h-[85dvh] max-w-xl overflow-y-auto border-white/10 bg-zinc-900 text-zinc-100">
         <DialogHeader>
           <DialogTitle className="text-zinc-100">Settings</DialogTitle>
           <DialogDescription className="text-zinc-500">
@@ -83,7 +86,11 @@ export function SettingsDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="playback" className="gap-4">
+        <Tabs
+          value={settingsTab}
+          onValueChange={(value) => setSettingsTab(value as SettingsTab)}
+          className="gap-4"
+        >
           <TabsList className="grid h-9 w-full grid-cols-3 border border-white/10 bg-white/5">
             <TabsTrigger
               value="playback"
@@ -191,9 +198,22 @@ export function SettingsDialog() {
 
           {/* ---------- Appearance ---------- */}
           <TabsContent value="appearance" className="mt-1 divide-y divide-white/5">
+            {/* Built-in themes */}
+            <div className="pb-3">
+              <div className="space-y-1">
+                <Label className="text-zinc-100">Theme</Label>
+                <p className="text-xs text-zinc-500">
+                  10 built-in themes restyle the whole player instantly.
+                </p>
+              </div>
+              <div className="mt-3">
+                <ThemePicker columns={2} />
+              </div>
+            </div>
+
             <SettingsRow
               label="Accent color"
-              description="Used for highlights across the app"
+              description="Fine-tune the highlight color on top of the theme"
             >
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {accentPresets.map((preset) => {

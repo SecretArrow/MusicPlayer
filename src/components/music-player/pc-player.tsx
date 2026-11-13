@@ -36,6 +36,7 @@ import {
   type SortKey,
   type View,
 } from "@/store/player-store";
+import { Palette } from "lucide-react";
 import { demoGenres } from "@/data/music";
 import { CoverArt } from "./cover-art";
 import { PlayerControls, PlayerRightControls } from "./player-controls";
@@ -81,6 +82,7 @@ export function PcPlayer() {
   const librarySort = usePlayerStore((s) => s.librarySort);
   const setLibrarySort = usePlayerStore((s) => s.setLibrarySort);
   const setShowSettings = usePlayerStore((s) => s.setShowSettings);
+  const openSettings = usePlayerStore((s) => s.openSettings);
   const setShowShortcuts = usePlayerStore((s) => s.setShowShortcuts);
   const setShowFullNowPlaying = usePlayerStore((s) => s.setShowFullNowPlaying);
   const setShowFullNowPlayingState = setShowFullNowPlaying;
@@ -257,6 +259,15 @@ export function PcPlayer() {
               >
                 <SlidersHorizontal className="h-4 w-4" />
               </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => openSettings("appearance")}
+                title="Themes and appearance"
+                className="h-8 w-8 text-zinc-400 hover:text-white"
+              >
+                <Palette className="h-4 w-4" />
+              </Button>
               <DeviceMenu />
               <Button
                 variant="ghost"
@@ -324,7 +335,7 @@ export function PcPlayer() {
 
         {/* EQ side panel */}
         {eqOpen && (
-          <aside className="hidden w-72 shrink-0 flex-col overflow-hidden rounded-lg bg-zinc-900 md:flex">
+          <aside className="hidden w-80 shrink-0 flex-col overflow-hidden rounded-lg bg-zinc-900 md:flex">
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-sm font-semibold text-white">Equalizer</span>
               <Button

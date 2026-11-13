@@ -1,0 +1,881 @@
+     1→"use client";
+     2→
+     3→import { useMemo, useState } from "react";
+     4→import {
+     5→  Home,
+     6→  Search,
+     7→  Library,
+     8→  Plus,
+     9→  Heart,
+    10→  Play,
+    11→  Pause,
+    12→  ChevronRight,
+    13→  SlidersHorizontal,
+    14→  Settings,
+    15→  Keyboard,
+    16→  History,
+    17→  AudioLines,
+    18→  ChartBar,
+    19→  Users,
+    20→  Disc3,
+    21→  ListMusic,
+    22→  Maximize2,
+    23→  X,
+    24→  Smartphone,
+    25→} from "lucide-react";
+    26→import { cn } from "@/lib/utils";
+    27→import { Button } from "@/components/ui/button";
+    28→import { Input } from "@/components/ui/input";
+    29→import { ScrollArea } from "@/components/ui/scroll-area";
+    30→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    31→import {
+    32→  usePlayerStore,
+    33→  useCurrentTrack,
+    34→  useAllTracks,
+    35→  formatTime,
+    36→  type SortKey,
+    37→  type View,
+    38→} from "@/store/player-store";
+    39→import { demoGenres } from "@/data/music";
+    40→import { CoverArt } from "./cover-art";
+    41→import { PlayerControls, PlayerRightControls } from "./player-controls";
+    42→import { LyricsPanel } from "./lyrics-panel";
+    43→import { QueuePanel } from "./queue-panel";
+    44→import { EqualizerPanel } from "./equalizer-panel";
+    45→import { PlaybackSpeedMenu, SleepTimerMenu } from "./playback-extras";
+    46→import { DeviceMenu } from "./device-menu";
+    47→import { ImportLocalButton } from "./local-import";
+    48→import { CreatePlaylistDialog } from "./playlist-dialogs";
+    49→import { TrackTable, TrackRowGrid, CardRow } from "./track-list";
+    50→import { ArtistPage } from "./artist-page";
+    51→import { AlbumPage } from "./album-page";
+    52→import { GenreBrowse } from "./genre-browse";
+    53→import { RecentView } from "./recent-view";
+    54→import { StatsView } from "./stats-view";
+    55→import { NowPlayingOverlay } from "./now-playing-overlay";
+    56→
+    57→const navItems: { id: View; label: string; icon: typeof Home }[] = [
+    58→  { id: "home", label: "Home", icon: Home },
+    59→  { id: "search", label: "Search", icon: Search },
+    60→  { id: "library", label: "Your Library", icon: Library },
+    61→  { id: "recent", label: "Recently Played", icon: History },
+    62→  { id: "genre", label: "Genres", icon: AudioLines },
+    63→  { id: "stats", label: "Listening Stats", icon: ChartBar },
+    64→];
+    65→
+    66→export function PcPlayer() {
+    67→  const activeView = usePlayerStore((s) => s.activeView);
+    68→  const setActiveView = usePlayerStore((s) => s.setActiveView);
+    69→  const playlists = usePlayerStore((s) => s.playlists);
+    70→  const artists = usePlayerStore((s) => s.artists);
+    71→  const albums = usePlayerStore((s) => s.albums);
+    72→  const recentPlayed = usePlayerStore((s) => s.recentPlayed);
+    73→  const activePlaylistId = usePlayerStore((s) => s.activePlaylistId);
+    74→  const setActivePlaylist = usePlayerStore((s) => s.setActivePlaylist);
+    75→  const setActiveArtist = usePlayerStore((s) => s.setActiveArtist);
+    76→  const setActiveAlbum = usePlayerStore((s) => s.setActiveAlbum);
+    77→  const setActiveGenre = usePlayerStore((s) => s.setActiveGenre);
+    78→  const playTrack = usePlayerStore((s) => s.playTrack);
+    79→  const playPlaylist = usePlayerStore((s) => s.playPlaylist);
+    80→  const likedTrackIds = usePlayerStore((s) => s.likedTrackIds);
+    81→  const librarySort = usePlayerStore((s) => s.librarySort);
+    82→  const setLibrarySort = usePlayerStore((s) => s.setLibrarySort);
+    83→  const setShowSettings = usePlayerStore((s) => s.setShowSettings);
+    84→  const setShowShortcuts = usePlayerStore((s) => s.setShowShortcuts);
+    85→  const setShowFullNowPlaying = usePlayerStore((s) => s.setShowFullNowPlaying);
+    86→  const setShowFullNowPlayingState = setShowFullNowPlaying;
+    87→  const setUiMode = usePlayerStore((s) => s.setUiMode);
+    88→  const localTracks = usePlayerStore((s) => s.localTracks);
+    89→
+    90→  const track = useCurrentTrack();
+    91→  const allTracks = useAllTracks();
+    92→
+    93→  const [eqOpen, setEqOpen] = useState(false);
+    94→  const [createOpen, setCreateOpen] = useState(false);
+    95→
+    96→  const showQueuePanel = activeView === "queue";
+    97→  const showLyricsPanel = activeView === "lyrics";
+    98→  const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
+    99→  const likedTracks = useMemo(
+   100→    () => [...allTracks].filter((t) => likedTrackIds.has(t.id)),
+   101→    [allTracks, likedTrackIds]
+   102→  );
+   103→
+   104→  function sortTracks(ids: string[]): string[] {
+   105→    if (librarySort === "custom") return ids;
+   106→    const list = ids
+   107→      .map((id) => allTracks.find((t) => t.id === id))
+   108→      .filter((t): t is NonNullable<typeof t> => Boolean(t));
+   109→    const sorted = [...list];
+   110→    if (librarySort === "title") sorted.sort((a, b) => a.title.localeCompare(b.title));
+   111→    if (librarySort === "artist") sorted.sort((a, b) => a.artist.localeCompare(b.artist));
+   112→    if (librarySort === "duration") sorted.sort((a, b) => b.duration - a.duration);
+   113→    if (librarySort === "plays") sorted.sort((a, b) => parseInt(b.plays) - parseInt(a.plays));
+   114→    return sorted.map((t) => t.id);
+   115→  }
+   116→
+   117→  return (
+   118→    <div className="flex h-full w-full flex-col gap-2 bg-zinc-950 p-2 text-zinc-100">
+   119→      {/* Fullscreen overlay + shared dialogs are rendered here for PC scope */}
+   120→      <NowPlayingOverlay />
+   121→
+   122→      <div className="flex min-h-0 flex-1 gap-2">
+   123→        {/* Sidebar */}
+   124→        <aside className="hidden w-60 shrink-0 flex-col gap-2 sm:flex">
+   125→          <div className="rounded-lg bg-zinc-900 p-3">
+   126→            <nav className="flex flex-col gap-1">
+   127→              {navItems.map((item) => (
+   128→                <Button
+   129→                  key={item.id}
+   130→                  variant="ghost"
+   131→                  onClick={() => {
+   132→                    setActiveView(item.id);
+   133→                    if (item.id === "genre") setActiveGenre(null);
+   134→                    if (item.id !== "library") setActivePlaylist(null);
+   135→                  }}
+   136→                  className={cn(
+   137→                    "justify-start gap-4 px-3 font-semibold text-zinc-300",
+   138→                    activeView === item.id && !activePlaylistId && "bg-white/10 text-white"
+   139→                  )}
+   140→                >
+   141→                  <item.icon className="h-5 w-5" />
+   142→                  {item.label}
+   143→                </Button>
+   144→              ))}
+   145→            </nav>
+   146→          </div>
+   147→
+   148→          {/* Library card */}
+   149→          <div className="flex min-h-0 flex-1 flex-col rounded-lg bg-zinc-900">
+   150→            <div className="flex items-center justify-between px-4 py-3">
+   151→              <button
+   152→                onClick={() => {
+   153→                  setActiveView("library");
+   154→                  setActivePlaylist(null);
+   155→                }}
+   156→                className="flex items-center gap-3 text-sm font-semibold text-zinc-300 hover:text-white"
+   157→              >
+   158→                <Library className="h-5 w-5" />
+   159→                Your Library
+   160→              </button>
+   161→              <div className="flex items-center">
+   162→                <Button
+   163→                  variant="ghost"
+   164→                  size="icon"
+   165→                  className="h-7 w-7 text-zinc-400"
+   166→                  onClick={() => setCreateOpen(true)}
+   167→                  title="Create playlist"
+   168→                >
+   169→                  <Plus className="h-4 w-4" />
+   170→                </Button>
+   171→              </div>
+   172→            </div>
+   173→            <ScrollArea className="flex-1 px-2">
+   174→              <div className="flex flex-col gap-1 pb-3">
+   175→                <button
+   176→                  onClick={() => {
+   177→                    setActiveView("library");
+   178→                    setActivePlaylist("liked");
+   179→                  }}
+   180→                  className={cn(
+   181→                    "flex items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-white/5",
+   182→                    activePlaylistId === "liked" && "bg-white/5"
+   183→                  )}
+   184→                >
+   185→                  <div className="flex h-12 w-12 items-center justify-center rounded-md bg-gradient-to-br from-purple-600 to-[color:var(--accent)]">
+   186→                    <Heart className="h-5 w-5 text-white" fill="currentColor" />
+   187→                  </div>
+   188→                  <div className="min-w-0">
+   189→                    <div className="truncate text-sm font-semibold text-white">Liked Songs</div>
+   190→                    <div className="truncate text-xs text-zinc-400">
+   191→                      Playlist · {likedTracks.length} songs
+   192→                    </div>
+   193→                  </div>
+   194→                </button>
+   195→
+   196→                {playlists.map((pl) => (
+   197→                  <button
+   198→                    key={pl.id}
+   199→                    onClick={() => {
+   200→                      setActiveView("library");
+   201→                      setActivePlaylist(pl.id);
+   202→                    }}
+   203→                    className={cn(
+   204→                      "flex items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-white/5",
+   205→                      activePlaylistId === pl.id && "bg-white/5"
+   206→                    )}
+   207→                  >
+   208→                    <div
+   209→                      className="h-12 w-12 shrink-0 rounded-md"
+   210→                      style={{ background: pl.cover }}
+   211→                    />
+   212→                    <div className="min-w-0">
+   213→                      <div className="truncate text-sm font-semibold text-white">{pl.title}</div>
+   214→                      <div className="truncate text-xs text-zinc-400">
+   215→                        Playlist · {pl.curator}
+   216→                      </div>
+   217→                    </div>
+   218→                  </button>
+   219→                ))}
+   220→              </div>
+   221→            </ScrollArea>
+   222→          </div>
+   223→        </aside>
+   224→
+   225→        {/* Main content */}
+   226→        <main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-gradient-to-b from-zinc-900 to-zinc-950">
+   227→          {/* Toolbar */}
+   228→          <div className="flex items-center gap-2 px-4 py-3">
+   229→            <div className="relative min-w-0 flex-1 max-w-md">
+   230→              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+   231→              <Input
+   232→                placeholder="Search songs, artists, albums…"
+   233→                className="rounded-full border-white/10 bg-white/5 pl-9 text-zinc-100 placeholder:text-zinc-500"
+   234→                onFocus={() => setActiveView("search")}
+   235→              />
+   236→            </div>
+   237→            <div className="ml-auto flex shrink-0 items-center gap-1">
+   238→              <Button
+   239→                variant="ghost"
+   240→                size="icon"
+   241→                onClick={() => setUiMode("android")}
+   242→                title="Switch to Android mode"
+   243→                className="h-8 w-8 text-zinc-400 hover:text-white"
+   244→              >
+   245→                <Smartphone className="h-4 w-4" />
+   246→              </Button>
+   247→              <ImportLocalButton className="hidden lg:inline-flex" />
+   248→              <Button
+   249→                variant="ghost"
+   250→                size="icon"
+   251→                onClick={() => setEqOpen(!eqOpen)}
+   252→                title="Equalizer"
+   253→                className={cn(
+   254→                  "h-8 w-8",
+   255→                  eqOpen ? "text-[color:var(--accent)]" : "text-zinc-400 hover:text-white"
+   256→                )}
+   257→              >
+   258→                <SlidersHorizontal className="h-4 w-4" />
+   259→              </Button>
+   260→              <DeviceMenu />
+   261→              <Button
+   262→                variant="ghost"
+   263→                size="icon"
+   264→                onClick={() => setShowShortcuts(true)}
+   265→                title="Keyboard shortcuts (?)"
+   266→                className="h-8 w-8 text-zinc-400 hover:text-white"
+   267→              >
+   268→                <Keyboard className="h-4 w-4" />
+   269→              </Button>
+   270→              <Button
+   271→                variant="ghost"
+   272→                size="icon"
+   273→                onClick={() => setShowSettings(true)}
+   274→                title="Settings"
+   275→                className="h-8 w-8 text-zinc-400 hover:text-white"
+   276→              >
+   277→                <Settings className="h-4 w-4" />
+   278→              </Button>
+   279→            </div>
+   280→          </div>
+   281→
+   282→          {/* Scrollable main area */}
+   283→          <ScrollArea className="flex-1">
+   284→            <div className="px-6 pb-6">
+   285→              {showLyricsPanel ? (
+   286→                <LyricsPanel />
+   287→              ) : showQueuePanel ? (
+   288→                <QueuePanel />
+   289→              ) : activeView === "artist" ? (
+   290→                <ArtistPage />
+   291→              ) : activeView === "album" ? (
+   292→                <AlbumPage />
+   293→              ) : activeView === "genre" ? (
+   294→                <GenreBrowse />
+   295→              ) : activeView === "recent" ? (
+   296→                <RecentView />
+   297→              ) : activeView === "stats" ? (
+   298→                <StatsView />
+   299→              ) : activePlaylistId === "liked" ? (
+   300→                <PlaylistView
+   301→                  title="Liked Songs"
+   302→                  description="Songs you've liked across the app"
+   303→                  cover="linear-gradient(135deg,#9333EA 0%,#10B981 100%)"
+   304→                  trackIds={likedTracks.map((t) => t.id)}
+   305→                />
+   306→              ) : activePlaylist ? (
+   307→                <PlaylistView
+   308→                  title={activePlaylist.title}
+   309→                  description={activePlaylist.description}
+   310→                  cover={activePlaylist.cover}
+   311→                  trackIds={sortTracks(activePlaylist.trackIds)}
+   312→                  editable={activePlaylist.editable}
+   313→                />
+   314→              ) : activeView === "search" ? (
+   315→                <SearchView />
+   316→              ) : activeView === "library" ? (
+   317→                <LibraryView />
+   318→              ) : (
+   319→                <HomeView />
+   320→              )}
+   321→            </div>
+   322→          </ScrollArea>
+   323→        </main>
+   324→
+   325→        {/* EQ side panel */}
+   326→        {eqOpen && (
+   327→          <aside className="hidden w-72 shrink-0 flex-col overflow-hidden rounded-lg bg-zinc-900 md:flex">
+   328→            <div className="flex items-center justify-between px-4 py-3">
+   329→              <span className="text-sm font-semibold text-white">Equalizer</span>
+   330→              <Button
+   331→                variant="ghost"
+   332→                size="icon"
+   333→                className="h-7 w-7 text-zinc-400"
+   334→                onClick={() => setEqOpen(false)}
+   335→              >
+   336→                <X className="h-4 w-4" />
+   337→              </Button>
+   338→            </div>
+   339→            <ScrollArea className="flex-1 px-4 pb-4">
+   340→              <EqualizerPanel compact />
+   341→            </ScrollArea>
+   342→          </aside>
+   343→        )}
+   344→      </div>
+   345→
+   346→      {/* Bottom player bar */}
+   347→      <footer className="flex h-20 shrink-0 items-center gap-4 rounded-lg bg-zinc-900 px-4">
+   348→        {/* Left: current track */}
+   349→        <div className="flex w-[30%] min-w-0 items-center gap-3">
+   350→          {track ? (
+   351→            <>
+   352→              <CoverArt cover={track.cover} accent={track.accent} title={track.title} size="md" />
+   353→              <div className="min-w-0">
+   354→                <div className="truncate text-sm font-semibold text-white">{track.title}</div>
+   355→                <button
+   356→                  onClick={() => setActiveArtist(track.artistId)}
+   357→                  className="max-w-full truncate text-xs text-zinc-400 hover:text-white hover:underline"
+   358→                >
+   359→                  {track.artist}
+   360→                </button>
+   361→              </div>
+   362→              <MaximizeButton />
+   363→            </>
+   364→          ) : (
+   365→            <div className="text-sm text-zinc-500">No track selected</div>
+   366→          )}
+   367→        </div>
+   368→
+   369→        {/* Center: controls + progress */}
+   370→        <div className="flex flex-1 flex-col gap-1">
+   371→          <PlayerControls
+   372→            variant="pc"
+   373→            onShowLyrics={() => setActiveView("lyrics")}
+   374→            onShowQueue={() => setActiveView("queue")}
+   375→          />
+   376→        </div>
+   377→
+   378→        {/* Right: extras + volume */}
+   379→        <div className="hidden w-[30%] justify-end md:flex">
+   380→          <div className="flex items-center gap-1">
+   381→            <PlaybackSpeedMenu showLabel={false} />
+   382→            <SleepTimerMenu showLabel={false} />
+   383→            <PlayerRightControls
+   384→              onShowLyrics={() => setActiveView("lyrics")}
+   385→              onShowQueue={() => setActiveView("queue")}
+   386→            />
+   387→          </div>
+   388→        </div>
+   389→      </footer>
+   390→
+   391→      <CreatePlaylistDialog open={createOpen} onOpenChange={setCreateOpen} />
+   392→    </div>
+   393→  );
+   394→
+   395→  function MaximizeButton() {
+   396→    return (
+   397→      <Button
+   398→        variant="ghost"
+   399→        size="icon"
+   400→        onClick={() => setShowFullNowPlayingState(true)}
+   401→        title="Full screen (F)"
+   402→        className="h-8 w-8 shrink-0 text-zinc-400 hover:text-white"
+   403→      >
+   404→        <Maximize2 className="h-4 w-4" />
+   405→      </Button>
+   406→    );
+   407→  }
+   408→
+   409→  function HomeView() {
+   410→    const recent = recentPlayed.length > 0 ? recentPlayed : allTracks.slice(0, 6).map((t) => t.id);
+   411→    return (
+   412→      <div className="space-y-8">
+   413→        <section>
+   414→          <p className="text-sm text-zinc-400">Good evening</p>
+   415→          <h1 className="mt-1 text-3xl font-bold text-white">
+   416→            Tonight&apos;s lineup, picked for you
+   417→          </h1>
+   418→        </section>
+   419→
+   420→        {/* Quick picks */}
+   421→        <section>
+   422→          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+   423→            {playlists.slice(0, 6).map((pl) => (
+   424→              <div
+   425→                key={pl.id}
+   426→                role="button"
+   427→                tabIndex={0}
+   428→                onClick={() => {
+   429→                  setActiveView("library");
+   430→                  setActivePlaylist(pl.id);
+   431→                }}
+   432→                onKeyDown={(e) => {
+   433→                  if (e.key === "Enter" || e.key === " ") {
+   434→                    setActiveView("library");
+   435→                    setActivePlaylist(pl.id);
+   436→                  }
+   437→                }}
+   438→                className="group flex cursor-pointer items-center gap-3 rounded-md bg-white/[0.06] pr-3 text-left transition-colors hover:bg-white/10"
+   439→              >
+   440→                <div className="h-16 w-16 shrink-0" style={{ background: pl.cover }} />
+   441→                <div className="min-w-0 flex-1 py-2">
+   442→                  <div className="truncate text-sm font-semibold text-white">{pl.title}</div>
+   443→                </div>
+   444→                <button
+   445→                  onClick={(e) => {
+   446→                    e.stopPropagation();
+   447→                    playPlaylist(pl.id);
+   448→                  }}
+   449→                  aria-label={`Play ${pl.title}`}
+   450→                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--accent)] text-zinc-950 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+   451→                >
+   452→                  <Play className="ml-0.5 h-4 w-4" fill="currentColor" />
+   453→                </button>
+   454→              </div>
+   455→            ))}
+   456→          </div>
+   457→        </section>
+   458→
+   459→        {/* Genre chips */}
+   460→        <section>
+   461→          <h2 className="mb-3 text-xl font-bold text-white">Browse genres</h2>
+   462→          <div className="flex flex-wrap gap-2">
+   463→            {demoGenres.map((g) => (
+   464→              <button
+   465→                key={g.name}
+   466→                onClick={() => setActiveGenre(g.name)}
+   467→                className="rounded-full border px-4 py-1.5 text-sm font-medium text-white transition-transform hover:scale-105"
+   468→                style={{ background: g.cover }}
+   469→              >
+   470→                {g.name}
+   471→              </button>
+   472→            ))}
+   473→          </div>
+   474→        </section>
+   475→
+   476→        <section>
+   477→          <div className="mb-3 flex items-center justify-between">
+   478→            <h2 className="text-xl font-bold text-white">Trending now</h2>
+   479→            <button className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white">
+   480→              Show all <ChevronRight className="h-3 w-3" />
+   481→            </button>
+   482→          </div>
+   483→          <TrackRowGrid trackIds={allTracks.slice(0, 6).map((t) => t.id)} />
+   484→        </section>
+   485→
+   486→        <section>
+   487→          <div className="mb-3 flex items-center justify-between">
+   488→            <h2 className="text-xl font-bold text-white">Recently played</h2>
+   489→            <button
+   490→              onClick={() => setActiveView("recent")}
+   491→              className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white"
+   492→            >
+   493→              See all <ChevronRight className="h-3 w-3" />
+   494→            </button>
+   495→          </div>
+   496→          <TrackRowGrid trackIds={recent.slice(0, 6)} />
+   497→        </section>
+   498→
+   499→        {/* Jump back in — artists */}
+   500→        <section>
+   501→          <h2 className="mb-3 text-xl font-bold text-white">Artists you follow</h2>
+   502→          <CardRow
+   503→            items={artists.map((a) => ({
+   504→              id: a.id,
+   505→              title: a.name,
+   506→              subtitle: a.genre,
+   507→              cover: a.cover,
+   508→            }))}
+   509→            onSelect={(id) => setActiveArtist(id)}
+   510→          />
+   511→        </section>
+   512→      </div>
+   513→    );
+   514→  }
+   515→
+   516→  function SearchView() {
+   517→    const [q, setQ] = useState("");
+   518→    const [tab, setTab] = useState<"songs" | "artists" | "albums" | "playlists">("songs");
+   519→    const pushSearchHistory = usePlayerStore((s) => s.pushSearchHistory);
+   520→    const searchHistory = usePlayerStore((s) => s.searchHistory);
+   521→
+   522→    const lower = q.toLowerCase().trim();
+   523→    const songs = useMemo(
+   524→      () =>
+   525→        !lower
+   526→          ? []
+   527→          : allTracks.filter(
+   528→              (t) =>
+   529→                t.title.toLowerCase().includes(lower) ||
+   530→                t.artist.toLowerCase().includes(lower) ||
+   531→                t.album.toLowerCase().includes(lower) ||
+   532→                t.genre.toLowerCase().includes(lower)
+   533→            ),
+   534→      [lower, allTracks]
+   535→    );
+   536→    const matchedArtists = useMemo(
+   537→      () => (!lower ? artists : artists.filter((a) => a.name.toLowerCase().includes(lower))),
+   538→      [lower, artists]
+   539→    );
+   540→    const matchedAlbums = useMemo(
+   541→      () => (!lower ? albums : albums.filter((al) => al.title.toLowerCase().includes(lower))),
+   542→      [lower, albums]
+   543→    );
+   544→    const matchedPlaylists = useMemo(
+   545→      () => (!lower ? playlists : playlists.filter((p) => p.title.toLowerCase().includes(lower))),
+   546→      [lower, playlists]
+   547→    );
+   548→
+   549→    return (
+   550→      <div className="space-y-6">
+   551→        <div>
+   552→          <h1 className="text-2xl font-bold text-white">Search</h1>
+   553→          <div className="relative mt-4 max-w-xl">
+   554→            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+   555→            <Input
+   556→              autoFocus
+   557→              placeholder="Type a song, artist, album or genre…"
+   558→              value={q}
+   559→              onChange={(e) => setQ(e.target.value)}
+   560→              onBlur={() => pushSearchHistory(q)}
+   561→              className="rounded-full border-white/10 bg-white/5 pl-9 text-zinc-100 placeholder:text-zinc-500"
+   562→            />
+   563→          </div>
+   564→          {/* Tabs */}
+   565→          <div className="mt-3 flex gap-2">
+   566→            {(["songs", "artists", "albums", "playlists"] as const).map((t) => (
+   567→              <button
+   568→                key={t}
+   569→                onClick={() => setTab(t)}
+   570→                className={cn(
+   571→                  "rounded-full px-3 py-1 text-xs font-semibold capitalize transition-colors",
+   572→                  tab === t
+   573→                    ? "bg-white text-zinc-950"
+   574→                    : "bg-white/5 text-zinc-300 hover:bg-white/10"
+   575→                )}
+   576→              >
+   577→                {t}
+   578→              </button>
+   579→            ))}
+   580→          </div>
+   581→          {/* Search history chips */}
+   582→          {!q && searchHistory.length > 0 && (
+   583→            <div className="mt-3 flex flex-wrap items-center gap-2">
+   584→              <span className="text-xs text-zinc-500">Recent:</span>
+   585→              {searchHistory.map((h) => (
+   586→                <button
+   587→                  key={h}
+   588→                  onClick={() => setQ(h)}
+   589→                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300 hover:bg-white/10"
+   590→                >
+   591→                  {h}
+   592→                </button>
+   593→              ))}
+   594→            </div>
+   595→          )}
+   596→          {!q && (
+   597→            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+   598→              {["Synthwave", "Indie Folk", "Jazz", "Ambient", "Pop"].map((g) => (
+   599→                <button
+   600→                  key={g}
+   601→                  onClick={() => setQ(g)}
+   602→                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-zinc-300 hover:bg-white/10"
+   603→                >
+   604→                  {g}
+   605→                </button>
+   606→              ))}
+   607→            </div>
+   608→          )}
+   609→        </div>
+   610→
+   611→        {tab === "songs" &&
+   612→          (q ? (
+   613→            songs.length > 0 ? (
+   614→              <TrackTable trackIds={songs.map((t) => t.id)} />
+   615→            ) : (
+   616→              <p className="text-sm text-zinc-500">No songs found for “{q}”.</p>
+   617→            )
+   618→          ) : (
+   619→            <TrackRowGrid trackIds={allTracks.slice(0, 6).map((t) => t.id)} />
+   620→          ))}
+   621→
+   622→        {tab === "artists" && (
+   623→          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+   624→            {matchedArtists.map((a) => (
+   625→              <button key={a.id} onClick={() => setActiveArtist(a.id)} className="group text-left">
+   626→                <div
+   627→                  className="aspect-square w-full rounded-full shadow-lg transition-transform group-hover:scale-[1.03]"
+   628→                  style={{ background: a.cover }}
+   629→                />
+   630→                <div className="mt-2 truncate text-sm font-semibold text-white">{a.name}</div>
+   631→                <div className="truncate text-xs text-zinc-400">{a.listeners} listeners</div>
+   632→              </button>
+   633→            ))}
+   634→          </div>
+   635→        )}
+   636→
+   637→        {tab === "albums" && (
+   638→          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+   639→            {matchedAlbums.map((al) => (
+   640→              <button key={al.id} onClick={() => setActiveAlbum(al.id)} className="group text-left">
+   641→                <div
+   642→                  className="aspect-square w-full rounded-lg shadow-lg transition-transform group-hover:scale-[1.03]"
+   643→                  style={{ background: al.cover }}
+   644→                />
+   645→                <div className="mt-2 truncate text-sm font-semibold text-white">{al.title}</div>
+   646→                <div className="truncate text-xs text-zinc-400">
+   647→                  {al.artistName} · {al.year}
+   648→                </div>
+   649→              </button>
+   650→            ))}
+   651→          </div>
+   652→        )}
+   653→
+   654→        {tab === "playlists" && (
+   655→          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+   656→            {matchedPlaylists.map((pl) => (
+   657→              <button
+   658→                key={pl.id}
+   659→                onClick={() => {
+   660→                  setActiveView("library");
+   661→                  setActivePlaylist(pl.id);
+   662→                }}
+   663→                className="group text-left"
+   664→              >
+   665→                <div
+   666→                  className="aspect-square w-full rounded-lg shadow-lg transition-transform group-hover:scale-[1.03]"
+   667→                  style={{ background: pl.cover }}
+   668→                />
+   669→                <div className="mt-2 truncate text-sm font-semibold text-white">{pl.title}</div>
+   670→                <div className="truncate text-xs text-zinc-400">{pl.curator}</div>
+   671→              </button>
+   672→            ))}
+   673→          </div>
+   674→        )}
+   675→      </div>
+   676→    );
+   677→  }
+   678→
+   679→  function LibraryView() {
+   680→    const [tab, setTab] = useState<"playlists" | "artists" | "albums" | "local">("playlists");
+   681→    return (
+   682→      <div className="space-y-6">
+   683→        <div className="flex flex-wrap items-center justify-between gap-3">
+   684→          <div>
+   685→            <h1 className="text-2xl font-bold text-white">Your Library</h1>
+   686→            <p className="mt-1 text-sm text-zinc-400">
+   687→              {playlists.length} playlists · {likedTracks.length} liked songs ·{" "}
+   688→              {localTracks.length} local files
+   689→            </p>
+   690→          </div>
+   691→          <div className="flex items-center gap-2">
+   692→            <Button
+   693→              variant="outline"
+   694→              size="sm"
+   695→              onClick={() => setCreateOpen(true)}
+   696→              className="gap-1.5 border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10"
+   697→            >
+   698→              <Plus className="h-4 w-4" /> New playlist
+   699→            </Button>
+   700→            <ImportLocalButton />
+   701→            <Select value={librarySort} onValueChange={(v) => setLibrarySort(v as SortKey)}>
+   702→              <SelectTrigger className="w-[150px] border-white/10 bg-white/5 text-zinc-200">
+   703→                <SelectValue placeholder="Sort" />
+   704→              </SelectTrigger>
+   705→              <SelectContent className="border-white/10 bg-zinc-900 text-zinc-100">
+   706→                <SelectItem value="custom">Custom order</SelectItem>
+   707→                <SelectItem value="title">Title</SelectItem>
+   708→                <SelectItem value="artist">Artist</SelectItem>
+   709→                <SelectItem value="duration">Duration</SelectItem>
+   710→                <SelectItem value="plays">Plays</SelectItem>
+   711→              </SelectContent>
+   712→            </Select>
+   713→          </div>
+   714→        </div>
+   715→
+   716→        <div className="flex gap-2">
+   717→          {(["playlists", "artists", "albums", "local"] as const).map((t) => (
+   718→            <button
+   719→              key={t}
+   720→              onClick={() => setTab(t)}
+   721→              className={cn(
+   722→                "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition-colors",
+   723→                tab === t ? "bg-white text-zinc-950" : "bg-white/5 text-zinc-300 hover:bg-white/10"
+   724→              )}
+   725→            >
+   726→              {t === "playlists" && <ListMusic className="h-3.5 w-3.5" />}
+   727→              {t === "artists" && <Users className="h-3.5 w-3.5" />}
+   728→              {t === "albums" && <Disc3 className="h-3.5 w-3.5" />}
+   729→              {t === "local" && <Library className="h-3.5 w-3.5" />}
+   730→              {t}
+   731→            </button>
+   732→          ))}
+   733→        </div>
+   734→
+   735→        {tab === "playlists" && (
+   736→          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+   737→            <button onClick={() => setActivePlaylist("liked")} className="group text-left">
+   738→              <div className="aspect-square w-full overflow-hidden rounded-lg bg-gradient-to-br from-purple-600 to-[color:var(--accent)] shadow-lg transition-transform group-hover:scale-[1.02]">
+   739→                <div className="flex h-full items-center justify-center">
+   740→                  <Heart className="h-10 w-10 text-white" fill="currentColor" />
+   741→                </div>
+   742→              </div>
+   743→              <div className="mt-2 text-sm font-semibold text-white">Liked Songs</div>
+   744→              <div className="text-xs text-zinc-400">{likedTracks.length} songs</div>
+   745→            </button>
+   746→            {playlists.map((pl) => (
+   747→              <button key={pl.id} onClick={() => setActivePlaylist(pl.id)} className="group text-left">
+   748→                <div
+   749→                  className="aspect-square w-full overflow-hidden rounded-lg shadow-lg transition-transform group-hover:scale-[1.02]"
+   750→                  style={{ background: pl.cover }}
+   751→                />
+   752→                <div className="mt-2 truncate text-sm font-semibold text-white">{pl.title}</div>
+   753→                <div className="truncate text-xs text-zinc-400">Playlist · {pl.curator}</div>
+   754→              </button>
+   755→            ))}
+   756→          </div>
+   757→        )}
+   758→
+   759→        {tab === "artists" && (
+   760→          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+   761→            {artists.map((a) => (
+   762→              <button key={a.id} onClick={() => setActiveArtist(a.id)} className="group text-left">
+   763→                <div
+   764→                  className="aspect-square w-full rounded-full shadow-lg transition-transform group-hover:scale-[1.03]"
+   765→                  style={{ background: a.cover }}
+   766→                />
+   767→                <div className="mt-2 truncate text-sm font-semibold text-white">{a.name}</div>
+   768→                <div className="truncate text-xs text-zinc-400">{a.genre}</div>
+   769→              </button>
+   770→            ))}
+   771→          </div>
+   772→        )}
+   773→
+   774→        {tab === "albums" && (
+   775→          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+   776→            {albums.map((al) => (
+   777→              <button key={al.id} onClick={() => setActiveAlbum(al.id)} className="group text-left">
+   778→                <div
+   779→                  className="aspect-square w-full rounded-lg shadow-lg transition-transform group-hover:scale-[1.03]"
+   780→                  style={{ background: al.cover }}
+   781→                />
+   782→                <div className="mt-2 truncate text-sm font-semibold text-white">{al.title}</div>
+   783→                <div className="truncate text-xs text-zinc-400">{al.artistName}</div>
+   784→              </button>
+   785→            ))}
+   786→          </div>
+   787→        )}
+   788→
+   789→        {tab === "local" && (
+   790→          <div className="space-y-4">
+   791→            <div className="flex items-center gap-3">
+   792→              <ImportLocalButton />
+   793→              <span className="text-xs text-zinc-500">
+   794→                Import audio files from your device — they stay in your browser session.
+   795→              </span>
+   796→            </div>
+   797→            {localTracks.length > 0 ? (
+   798→              <TrackTable trackIds={localTracks.map((t) => t.id)} />
+   799→            ) : (
+   800→              <p className="text-sm text-zinc-500">No local files imported yet.</p>
+   801→            )}
+   802→          </div>
+   803→        )}
+   804→      </div>
+   805→    );
+   806→  }
+   807→
+   808→  function PlaylistView({
+   809→    title,
+   810→    description,
+   811→    cover,
+   812→    trackIds,
+   813→    editable,
+   814→  }: {
+   815→    title: string;
+   816→    description: string;
+   817→    cover: string;
+   818→    trackIds: string[];
+   819→    editable?: boolean;
+   820→  }) {
+   821→    const deletePlaylist = usePlayerStore((s) => s.deletePlaylist);
+   822→    const list = trackIds
+   823→      .map((id) => allTracks.find((t) => t.id === id))
+   824→      .filter((t): t is NonNullable<typeof t> => Boolean(t));
+   825→    const totalSec = list.reduce((s, t) => s + t.duration, 0);
+   826→    return (
+   827→      <div className="space-y-6">
+   828→        <div className="flex items-end gap-5">
+   829→          <div className="h-44 w-44 shrink-0 rounded-lg shadow-2xl" style={{ background: cover }} />
+   830→          <div className="min-w-0 pb-2">
+   831→            <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+   832→              Playlist
+   833→            </div>
+   834→            <h1 className="mt-1 text-4xl font-bold text-white sm:text-5xl">{title}</h1>
+   835→            <p className="mt-2 max-w-xl text-sm text-zinc-400">{description}</p>
+   836→            <div className="mt-2 text-xs text-zinc-500">
+   837→              {list.length} songs · {Math.floor(totalSec / 60)} min {totalSec % 60} sec
+   838→            </div>
+   839→          </div>
+   840→        </div>
+   841→
+   842→        <div className="flex items-center gap-4">
+   843→          <button
+   844→            onClick={() => {
+   845→              if (list[0]) playTrack(list[0].id, list.map((t) => t.id));
+   846→            }}
+   847→            className="flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--accent)] text-zinc-950 shadow-lg transition-transform hover:scale-105"
+   848→          >
+   849→            <Play className="ml-0.5 h-5 w-5" fill="currentColor" />
+   850→          </button>
+   851→          <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white">
+   852→            <Heart className="h-6 w-6" />
+   853→          </Button>
+   854→          {editable && activePlaylistId && (
+   855→            <Button
+   856→              variant="ghost"
+   857→              size="sm"
+   858→              className="ml-auto text-xs text-zinc-400 hover:text-red-400"
+   859→              onClick={() => {
+   860→                deletePlaylist(activePlaylistId);
+   861→                setActivePlaylist(null);
+   862→              }}
+   863→            >
+   864→              Delete playlist
+   865→            </Button>
+   866→          )}
+   867→        </div>
+   868→
+   869→        {list.length > 0 ? (
+   870→          <TrackTable trackIds={trackIds} />
+   871→        ) : (
+   872→          <div className="rounded-lg border border-dashed border-white/10 p-8 text-center text-sm text-zinc-500">
+   873→            This playlist is empty. Use the ⋯ menu on any track row → “Add to playlist” to fill
+   874→            it up.
+   875→          </div>
+   876→        )}
+   877→      </div>
+   878→    );
+   879→  }
+   880→}
+   881→

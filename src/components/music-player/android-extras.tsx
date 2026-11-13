@@ -13,6 +13,7 @@ import {
   ListEnd,
   ListPlus,
   ListStart,
+  Palette,
   Play,
   Plus,
   Share2,
@@ -40,7 +41,9 @@ import {
   useCurrentTrack,
   usePlayerStore,
 } from "@/store/player-store";
+import { getTheme } from "@/data/themes";
 import { EqualizerPanel } from "./equalizer-panel";
+import { ThemePicker } from "./theme-picker";
 
 // ---------- Shared sheet chrome ----------
 
@@ -193,10 +196,12 @@ export function OptionsSheet({
   open,
   onClose,
   onOpenEqualizer,
+  onOpenThemes,
 }: {
   open: boolean;
   onClose: () => void;
   onOpenEqualizer: () => void;
+  onOpenThemes: () => void;
 }) {
   const playbackRate = usePlayerStore((s) => s.playbackRate);
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate);
@@ -364,6 +369,14 @@ export function OptionsSheet({
           />
         </OptionRow>
 
+        {/* Theme picker */}
+        <ActionRow
+          icon={Palette}
+          label="Theme"
+          onClick={onOpenThemes}
+          right={<ChevronRight className="h-4 w-4 shrink-0 text-zinc-500" />}
+        />
+
         {/* Equalizer */}
         <ActionRow
           icon={SlidersHorizontal}
@@ -412,6 +425,32 @@ export function EqualizerSheet({
       <SheetHeader title="Equalizer" onClose={onClose} />
       <div className={cn("flex-1 overflow-y-auto px-5 pt-1 pb-6", SCROLLBAR)}>
         <EqualizerPanel compact />
+      </div>
+    </SheetFrame>
+  );
+}
+
+// ---------- ThemeSheet ----------
+
+export function ThemeSheet({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const themeKey = usePlayerStore((s) => s.themeKey);
+  const theme = getTheme(themeKey);
+
+  return (
+    <SheetFrame open={open} onClose={onClose}>
+      <DragHandle />
+      <SheetHeader title="Theme" onClose={onClose} />
+      <div className={cn("flex-1 overflow-y-auto px-5 pt-1 pb-6", SCROLLBAR)}>
+        <ThemePicker columns={2} compact />
+        <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
+          <span className="text-zinc-300">{theme.label}</span> — {theme.description}
+        </p>
       </div>
     </SheetFrame>
   );

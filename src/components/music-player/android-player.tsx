@@ -45,6 +45,7 @@ import { DeviceMenu } from "./device-menu";
 import {
   OptionsSheet,
   EqualizerSheet,
+  ThemeSheet,
   TrackActionsSheet,
 } from "./android-extras";
 import { ArtistPage } from "./artist-page";
@@ -66,7 +67,7 @@ const repeatIcon: Record<RepeatMode, typeof Repeat> = {
   one: Repeat1,
 };
 
-type Sheet = "none" | "lyrics" | "queue" | "visual" | "options" | "equalizer";
+type Sheet = "none" | "lyrics" | "queue" | "visual" | "options" | "equalizer" | "theme";
 
 export function AndroidPlayer() {
   const activeView = usePlayerStore((s) => s.activeView);
@@ -434,13 +435,15 @@ export function AndroidPlayer() {
         <NowPlayingSheet sheet={sheet} setSheet={setSheet} />
       ) : null}
 
-      {/* Options / EQ / Track actions sheets */}
+      {/* Options / EQ / Theme / Track actions sheets */}
       <OptionsSheet
         open={sheet === "options"}
         onClose={() => setSheet("none")}
         onOpenEqualizer={() => setSheet("equalizer")}
+        onOpenThemes={() => setSheet("theme")}
       />
       <EqualizerSheet open={sheet === "equalizer"} onClose={() => setSheet("none")} />
+      <ThemeSheet open={sheet === "theme"} onClose={() => setSheet("none")} />
       <TrackActionsSheet
         trackId={actionsTrackId}
         open={actionsTrackId !== null}

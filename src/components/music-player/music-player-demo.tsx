@@ -1,9 +1,10 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { Monitor, Smartphone } from "lucide-react";
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
+import { getTheme } from "@/data/themes";
 import { PcPlayer } from "./pc-player";
 import { AndroidPlayer } from "./android-player";
 import { AudioController } from "./audio-controller";
@@ -23,6 +24,28 @@ export function MusicPlayerApp() {
   const mode = usePlayerStore((s) => s.uiMode);
   const setUiMode = usePlayerStore((s) => s.setUiMode);
   const accent = usePlayerStore((s) => s.accent);
+  const themeKey = usePlayerStore((s) => s.themeKey);
+
+  const theme = getTheme(themeKey);
+  // Theme palette overrides (Tailwind v4 zinc variables) + accent, applied on the
+  // root div for first paint; portals (dialogs) are covered by the effect below.
+  const themeStyle = {
+    ...theme.vars,
+    "--accent": accent,
+  } as CSSProperties;
+
+  // Mirror the same variables onto <html> so Radix portal dialogs and toasts
+  // (rendered outside the root div) inherit the active theme as well.
+  useEffect(() => {
+    const current = getTheme(themeKey);
+    const entries: [string, string][] = [
+      ...Object.entries(current.vars),
+      ["--accent", accent],
+    ];
+    const rootStyle = document.documentElement.style;
+    entries.forEach(([k, v]) => rootStyle.setProperty(k, v));
+    return () => entries.forEach(([k]) => rootStyle.removeProperty(k));
+  }, [themeKey, accent]);
 
   // True only after hydration (client), false during SSR — avoids hydration mismatch
   // for Zustand state + browser-only <audio> without setState-in-effect.
@@ -38,7 +61,7 @@ export function MusicPlayerApp() {
   return (
     <div
       className="relative h-dvh w-full overflow-hidden bg-zinc-950"
-      style={{ "--accent": accent } as CSSProperties}
+      style={themeStyle}
     >
       <AudioController />
 

@@ -13,6 +13,7 @@ import {
   type Artist,
   type Album,
 } from "@/data/music";
+import { THEMES } from "@/data/themes";
 
 export type RepeatMode = "off" | "all" | "one";
 export type View =
@@ -21,9 +22,12 @@ export type View =
 
 export type SortKey = "custom" | "title" | "artist" | "duration" | "plays";
 
+export type SettingsTab = "playback" | "appearance" | "about";
+
 export interface EqSettings {
   enabled: boolean;
   preset: string;
+  preamp: number; // dB -12..+12, applied after the EQ chain
   bands: number[]; // 10 bands, dB -12..+12
 }
 
@@ -47,6 +51,8 @@ interface PlayerState {
   // Playback
   isPlaying: boolean;
   currentTime: number;
+  /** Bumped on explicit seeks so the audio element can be re-synced (avoids feedback loop) */
+  seekNonce: number;
   duration: number;
   volume: number;
   muted: boolean;
@@ -66,6 +72,8 @@ interface PlayerState {
   // Appearance
   accent: string; // hex color
   accentKey: string;
+  themeKey: string; // built-in theme id (see src/data/themes.ts)
+  settingsTab: SettingsTab;
 
   // History & stats
   recentPlayed: string[];
@@ -104,6 +112,7 @@ interface PlayerState {
   // Actions — audio extras
   setEqBand: (index: number, value: number) => void;
   applyEqPreset: (preset: string, bands: number[]) => void;
+  setPreamp: (db: number) => void;
   toggleEq: () => void;
   setCrossfade: (v: boolean) => void;
   setNormalize: (v: boolean) => void;
@@ -118,6 +127,9 @@ interface PlayerState {
 
   // Actions — appearance
   setAccent: (key: string, color: string) => void;
+  setTheme: (key: string) => void;
+  setSettingsTab: (tab: SettingsTab) => void;
+  openSettings: (tab?: SettingsTab) => void;
 
   // Actions — library management
   addToPlaylist: (playlistId: string, trackId: string) => void;
@@ -163,15 +175,34 @@ function buildShuffledQueue(ids: string[]): string[] {
   return arr;
 }
 
+/**
+ * 10-band EQ presets (bands: 32 Hz … 16 kHz, dB -12..+12).
+ * 23 built-in presets covering genres, use-cases and hardware compensation.
+ */
 export const EQ_PRESETS: Record<string, number[]> = {
   flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   "bass boost": [8, 6, 4, 2, 0, 0, 0, 0, 0, 0],
+  "bass reducer": [-8, -6, -4, -2, 0, 0, 0, 0, 0, 0],
   "treble boost": [0, 0, 0, 0, 0, 2, 4, 6, 8, 8],
+  "treble reducer": [0, 0, 0, 0, 0, -2, -4, -6, -8, -8],
   vocal: [-3, -2, 0, 3, 5, 5, 3, 1, 0, -1],
   rock: [5, 4, 2, -1, -2, 0, 3, 5, 5, 4],
   pop: [-2, -1, 2, 4, 5, 3, 0, -1, -1, -2],
+  jazz: [4, 3, 1, 2, -1, -1, 0, 1, 3, 4],
+  classical: [4, 3, 2, 0, -1, -1, 0, 2, 3, 4],
   electronic: [6, 5, 1, 0, -2, 2, 1, 3, 5, 6],
-  "soft": [0, 1, 2, 3, 3, 2, 1, 0, -1, -2],
+  dance: [8, 6, 2, 0, -2, 1, 3, 5, 6, 7],
+  "hip-hop": [8, 6, 3, 1, -1, -1, 1, 3, 4, 4],
+  acoustic: [4, 3, 2, 1, 1, 2, 2, 3, 4, 3],
+  "r&b": [6, 4, 2, 0, -2, 1, 3, 4, 5, 4],
+  latin: [3, 3, 1, 0, 1, 2, 3, 3, 4, 4],
+  reggae: [2, 1, 0, 2, 3, 3, 1, 0, 1, 2],
+  metal: [5, 4, 3, 0, -1, 0, 3, 4, 5, 5],
+  country: [3, 1, 0, 1, 2, 2, 2, 1, 1, 2],
+  speech: [-6, -4, -1, 2, 4, 4, 3, 1, 0, -2],
+  loudness: [7, 5, 0, -2, -3, -2, 0, 3, 6, 7],
+  "small speakers": [6, 5, 3, 1, 0, 0, 1, 2, 2, 2],
+  soft: [0, 1, 2, 3, 3, 2, 1, 0, -1, -2],
 };
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -186,6 +217,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   isPlaying: false,
   currentTime: 0,
+  seekNonce: 0,
   duration: 0,
   volume: 0.7,
   muted: false,
@@ -193,7 +225,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   repeat: "off",
   playbackRate: 1,
 
-  eq: { enabled: false, preset: "flat", bands: [...EQ_PRESETS.flat] },
+  eq: { enabled: false, preset: "flat", preamp: 0, bands: [...EQ_PRESETS.flat] },
   crossfade: false,
   normalize: false,
   audioQuality: "high",
@@ -203,6 +235,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   accent: accentPresets[0].color,
   accentKey: accentPresets[0].key,
+  themeKey: THEMES[0].key,
+  settingsTab: "playback",
 
   recentPlayed: [],
   playCounts: {},
@@ -232,6 +266,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       currentIndex: finalIdx,
       isPlaying: true,
       currentTime: 0,
+      seekNonce: get().seekNonce + 1,
       abRepeat: { a: null, b: null },
     });
     get().recordPlay(trackId);
@@ -286,7 +321,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     get().recordPlay(queue[prevIdx]);
   },
 
-  seek: (time) => set({ currentTime: time }),
+  seek: (time) =>
+    set({ currentTime: time, seekNonce: get().seekNonce + 1 }),
   setVolume: (v) => set({ volume: v, muted: v === 0 }),
   toggleMute: () => set({ muted: !get().muted }),
   toggleShuffle: () => {
@@ -318,6 +354,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
   applyEqPreset: (preset, bands) =>
     set({ eq: { ...get().eq, preset, bands: [...bands] } }),
+  setPreamp: (db) => set({ eq: { ...get().eq, preamp: db } }),
   toggleEq: () => set({ eq: { ...get().eq, enabled: !get().eq.enabled } }),
   setCrossfade: (v) => set({ crossfade: v }),
   setNormalize: (v) => set({ normalize: v }),
@@ -332,6 +369,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   clearAbRepeat: () => set({ abRepeat: { a: null, b: null } }),
 
   setAccent: (key, color) => set({ accentKey: key, accent: color }),
+  setTheme: (key) => {
+    const theme = THEMES.find((t) => t.key === key) ?? THEMES[0];
+    set({ themeKey: theme.key, accent: theme.accent, accentKey: theme.key });
+  },
+  setSettingsTab: (tab) => set({ settingsTab: tab }),
+  openSettings: (tab) =>
+    set({ showSettings: true, ...(tab ? { settingsTab: tab } : {}) }),
 
   addToPlaylist: (playlistId, trackId) => {
     set({

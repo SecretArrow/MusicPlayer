@@ -2,7 +2,7 @@
 
 /**
  * Singleton Web Audio engine.
- * Chain: <audio> source → 10-band EQ (biquad peaking filters) → analyser → gain → destination
+ * Chain: <audio> source → 10-band EQ (biquad peaking filters) → preamp → analyser → gain → destination
  * The AudioContext is created lazily on first user gesture (play).
  */
 
@@ -12,10 +12,12 @@ export interface AudioEngine {
   ctx: AudioContext | null;
   analyser: AnalyserNode | null;
   eqFilters: BiquadFilterNode[];
+  preamp: GainNode | null;
   gain: GainNode;
   source: MediaElementAudioSourceNode | null;
   ensureContext: (audio: HTMLAudioElement) => void;
   applyEq: (enabled: boolean, bands: number[]) => void;
+  setPreamp: (db: number) => void;
   setGain: (v: number) => void;
   /** Smooth gain ramp helper (for fade in/out) */
   rampGain: (to: number, ms: number) => void;
@@ -28,6 +30,7 @@ function createEngine(): AudioEngine {
     ctx: null,
     analyser: null,
     eqFilters: [],
+    preamp: null,
     gain: null as unknown as GainNode,
     source: null,
     ensureContext(audio: HTMLAudioElement) {
@@ -55,21 +58,25 @@ function createEngine(): AudioEngine {
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
         analyser.smoothingTimeConstant = 0.82;
+        const preamp = ctx.createGain();
+        preamp.gain.value = 1;
         const gain = ctx.createGain();
 
-        // Wire: source → filters... → analyser → gain → destination
+        // Wire: source → filters... → preamp → analyser → gain → destination
         let node: AudioNode = source;
         for (const f of filters) {
           node.connect(f);
           node = f;
         }
-        node.connect(analyser);
+        node.connect(preamp);
+        preamp.connect(analyser);
         analyser.connect(gain);
         gain.connect(ctx.destination);
 
         eng.ctx = ctx;
         eng.source = source;
         eng.eqFilters = filters;
+        eng.preamp = preamp;
         eng.analyser = analyser;
         eng.gain = gain;
       } catch {
@@ -82,6 +89,11 @@ function createEngine(): AudioEngine {
         const target = enabled ? (bands[i] ?? 0) : 0;
         f.gain.setTargetAtTime(target, eng.ctx!.currentTime, 0.05);
       });
+    },
+    setPreamp(db) {
+      if (!eng.ctx || !eng.preamp) return;
+      const linear = Math.pow(10, db / 20);
+      eng.preamp.gain.setTargetAtTime(linear, eng.ctx.currentTime, 0.05);
     },
     setGain(v) {
       if (!eng.ctx) return;

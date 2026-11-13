@@ -33,6 +33,18 @@ export function AudioController() {
   const next = usePlayerStore((s) => s.next);
   const cancelSleep = usePlayerStore((s) => s.cancelSleepTimer);
   const currentTime = usePlayerStore((s) => s.currentTime);
+  const seekNonce = usePlayerStore((s) => s.seekNonce);
+
+  // Explicit seeks / replay-same-track: push store time into the audio element.
+  // Timeupdate-driven store updates don't bump the nonce, so no feedback loop.
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || seekNonce === 0) return;
+    const target = usePlayerStore.getState().currentTime;
+    if (isFinite(target) && Math.abs(audio.currentTime - target) > 0.01) {
+      audio.currentTime = target;
+    }
+  }, [seekNonce]);
 
   const currentTrackId = queue[currentIndex];
   const currentTrack =
@@ -56,6 +68,9 @@ export function AudioController() {
     const engine = getAudioEngine();
     if (isPlaying) {
       engine.ensureContext(audio);
+      // Context may have just been created — push current EQ/preamp state into it
+      engine.applyEq(eq.enabled, eq.bands);
+      engine.setPreamp(eq.preamp);
       audio.playbackRate = playbackRate;
       if (crossfade) engine.rampGain(1, 400);
       audio.play().catch(() => {
@@ -69,7 +84,7 @@ export function AudioController() {
       }
       audio.pause();
     }
-  }, [isPlaying, currentTrack, playbackRate, crossfade]);
+  }, [isPlaying, currentTrack, playbackRate, crossfade, eq]);
 
   // Restore gain after fade-out pause
   useEffect(() => {
@@ -104,6 +119,11 @@ export function AudioController() {
   useEffect(() => {
     getAudioEngine().applyEq(eq.enabled, eq.bands);
   }, [eq]);
+
+  // Preamp apply
+  useEffect(() => {
+    getAudioEngine().setPreamp(eq.preamp);
+  }, [eq.preamp]);
 
   // Time update → sleep timer + AB repeat handled here
   const sleepFired = useRef(false);
