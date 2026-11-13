@@ -14,37 +14,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Top 25 Music Players Survey & Player Design Demo",
+  title: "Music Player UI",
   description:
-    "Survey of the world's top 25 music players across streaming, regional, audiophile and local categories, paired with a complete music player design that works in both PC and Android modes.",
+    "A modern music player UI design — desktop (PC) and Android layouts in one interactive web demo.",
   keywords: [
     "music player",
-    "music streaming",
-    "Spotify",
-    "Apple Music",
-    "YouTube Music",
-    "music player design",
+    "music player UI",
     "PC music player",
     "Android music player",
-    "top music apps",
+    "player design",
   ],
   authors: [{ name: "Z.ai" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
-  openGraph: {
-    title: "Top 25 Music Players Survey & Player Design Demo",
-    description:
-      "Survey of the world's top 25 music players paired with a complete music player design for PC and Android.",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Top 25 Music Players Survey & Player Design Demo",
-    description:
-      "Survey of the world's top 25 music players paired with a complete music player design for PC and Android.",
   },
 };
 

@@ -17,7 +17,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import {
   usePlayerStore,
   useCurrentTrack,
@@ -175,12 +174,6 @@ export function PcPlayer() {
                 }}
               />
             </div>
-            <Badge
-              variant="outline"
-              className="hidden items-center gap-1.5 border-white/10 bg-white/5 text-zinc-300 md:flex"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> PC Mode
-            </Badge>
           </div>
 
           {/* Scrollable main area */}
@@ -283,13 +276,21 @@ export function PcPlayer() {
         <section>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {playlists.slice(0, 6).map((pl) => (
-              <button
+              <div
                 key={pl.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   setActiveView("library");
                   setActivePlaylist(pl.id);
                 }}
-                className="group flex items-center gap-3 rounded-md bg-white/[0.06] pr-3 text-left transition-colors hover:bg-white/10"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    setActiveView("library");
+                    setActivePlaylist(pl.id);
+                  }
+                }}
+                className="group flex cursor-pointer items-center gap-3 rounded-md bg-white/[0.06] pr-3 text-left transition-colors hover:bg-white/10"
               >
                 <div className="h-16 w-16 shrink-0" style={{ background: pl.cover }} />
                 <div className="min-w-0 flex-1 py-2">
@@ -300,11 +301,12 @@ export function PcPlayer() {
                     e.stopPropagation();
                     playPlaylist(pl.id);
                   }}
+                  aria-label={`Play ${pl.title}`}
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-emerald-950 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
                 >
                   <Play className="ml-0.5 h-4 w-4" fill="currentColor" />
                 </button>
-              </button>
+              </div>
             ))}
           </div>
         </section>
