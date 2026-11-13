@@ -68,7 +68,7 @@ function Tile({ className, children }: { className?: string; children: ReactNode
   return (
     <div
       className={cn(
-        "rounded-3xl border border-white/5 bg-zinc-900 p-4",
+        "@container rounded-3xl border border-white/5 bg-zinc-900 p-4",
         className
       )}
     >

@@ -83,7 +83,7 @@ export function StatsView() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
         {cards.map(({ label, value, icon: Icon }) => (
           <div
             key={label}

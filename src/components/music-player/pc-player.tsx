@@ -117,7 +117,7 @@ export function PcPlayer() {
                 </Button>
               </div>
             </div>
-            <ScrollArea className="flex-1 px-2">
+            <ScrollArea className="min-h-0 flex-1 px-2">
               <div className="flex flex-col gap-1 pb-3">
                 <button
                   onClick={() => {
@@ -187,7 +187,7 @@ export function PcPlayer() {
           </div>
 
           {/* Scrollable main area */}
-          <ScrollArea className="flex-1">
+          <ScrollArea className="min-h-0 flex-1">
             <MainContent />
           </ScrollArea>
         </main>
@@ -201,7 +201,7 @@ export function PcPlayer() {
       </div>
 
       {/* Bottom player bar */}
-      <footer className="flex h-20 shrink-0 items-center gap-4 rounded-lg bg-zinc-900 px-4">
+      <footer className="relative z-10 flex h-20 shrink-0 items-center gap-4 rounded-lg bg-zinc-900 px-4">
         {/* Left: current track */}
         <div className="flex w-[30%] min-w-0 items-center gap-3">
           {track ? (

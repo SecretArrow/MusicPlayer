@@ -215,7 +215,7 @@ export function MainContent() {
   const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
 
   return (
-    <div className="px-6 pb-6">
+    <div className="@container px-6 pb-6">
       {activeView === "lyrics" ? (
         <LyricsPanel />
       ) : activeView === "queue" ? (
@@ -281,7 +281,7 @@ function HomeView() {
 
       {/* Quick picks */}
       <section>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2 @3xl:grid-cols-3">
           {playlists.slice(0, 6).map((pl) => (
             <div
               key={pl.id}
@@ -490,7 +490,7 @@ function SearchView() {
         ))}
 
       {tab === "artists" && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
           {matchedArtists.map((a) => (
             <button key={a.id} onClick={() => setActiveArtist(a.id)} className="group text-left">
               <div
@@ -505,7 +505,7 @@ function SearchView() {
       )}
 
       {tab === "albums" && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
           {matchedAlbums.map((al) => (
             <button key={al.id} onClick={() => setActiveAlbum(al.id)} className="group text-left">
               <div
@@ -522,7 +522,7 @@ function SearchView() {
       )}
 
       {tab === "playlists" && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
           {matchedPlaylists.map((pl) => (
             <button
               key={pl.id}
@@ -616,7 +616,7 @@ function LibraryView() {
       </div>
 
       {tab === "playlists" && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
           <button onClick={() => setActivePlaylist("liked")} className="group text-left">
             <div className="aspect-square w-full overflow-hidden rounded-lg bg-gradient-to-br from-purple-600 to-[color:var(--accent)] shadow-lg transition-transform group-hover:scale-[1.02]">
               <div className="flex h-full items-center justify-center">
@@ -640,7 +640,7 @@ function LibraryView() {
       )}
 
       {tab === "artists" && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
           {artists.map((a) => (
             <button key={a.id} onClick={() => setActiveArtist(a.id)} className="group text-left">
               <div
@@ -655,7 +655,7 @@ function LibraryView() {
       )}
 
       {tab === "albums" && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
           {albums.map((al) => (
             <button key={al.id} onClick={() => setActiveAlbum(al.id)} className="group text-left">
               <div

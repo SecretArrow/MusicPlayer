@@ -283,7 +283,7 @@ export function FocusLayout() {
               </button>
             </div>
           </div>
-          <ScrollArea className="flex-1">
+          <ScrollArea className="min-h-0 flex-1">
             <MainContent />
             {/* Keep sheet content clear of the dock beneath */}
             <div className="h-44" aria-hidden="true" />

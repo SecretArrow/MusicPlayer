@@ -247,7 +247,7 @@ export function BroadcastLayout() {
       {showMain ? (
         /* Shared content area (library / playlist / artist / lyrics / …) */
         <main className="flex h-[620px] min-h-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-zinc-900 xl:h-full">
-          <ScrollArea className="flex-1">
+          <ScrollArea className="min-h-0 flex-1">
             <MainContent />
           </ScrollArea>
         </main>
