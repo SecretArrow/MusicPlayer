@@ -3,6 +3,12 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { getAudioEngine } from "@/lib/audio-engine";
+import {
+  gradientArtwork,
+  mediaSessionSupported,
+  pushPositionState,
+  MEDIA_SESSION_ACTIONS,
+} from "@/lib/media-session";
 import { usePlayerStore } from "@/store/player-store";
 
 /**
@@ -33,6 +39,7 @@ export function AudioController() {
   const next = usePlayerStore((s) => s.next);
   const cancelSleep = usePlayerStore((s) => s.cancelSleepTimer);
   const currentTime = usePlayerStore((s) => s.currentTime);
+  const duration = usePlayerStore((s) => s.duration);
   const seekNonce = usePlayerStore((s) => s.seekNonce);
 
   // Explicit seeks / replay-same-track: push store time into the audio element.
@@ -125,13 +132,77 @@ export function AudioController() {
     getAudioEngine().setPreamp(eq.preamp);
   }, [eq.preamp]);
 
+  // ---------- Media Session (lock screen, Bluetooth, Android Auto projection) ----------
+
+  // Metadata + generated gradient artwork whenever the track changes
+  useEffect(() => {
+    if (!mediaSessionSupported() || !currentTrack) return;
+    if (typeof MediaMetadata === "undefined") return;
+    const art = gradientArtwork(currentTrack);
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: currentTrack.title,
+      artist: currentTrack.artist,
+      album: currentTrack.album,
+      artwork: art ? [{ src: art, sizes: "512x512", type: "image/png" }] : [],
+    });
+  }, [currentTrack]);
+
+  // playbackState — drives play/pause icons on car displays and lock screens
+  useEffect(() => {
+    if (!mediaSessionSupported()) return;
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [isPlaying]);
+
+  // Remote hardware actions: steering-wheel controls, earbuds, car touch panel
+  useEffect(() => {
+    if (!mediaSessionSupported()) return;
+    const ms = navigator.mediaSession;
+    const st = () => usePlayerStore.getState();
+    try {
+      ms.setActionHandler("play", () => st().setIsPlaying(true));
+      ms.setActionHandler("pause", () => st().setIsPlaying(false));
+      ms.setActionHandler("previoustrack", () => st().prev());
+      ms.setActionHandler("nexttrack", () => st().next());
+      ms.setActionHandler("seekbackward", (d) =>
+        st().seek(Math.max(0, st().currentTime - (d?.seekOffset ?? 10)))
+      );
+      ms.setActionHandler("seekforward", (d) =>
+        st().seek(st().currentTime + (d?.seekOffset ?? 10))
+      );
+      ms.setActionHandler("seekto", (d) => {
+        if (d.seekTime != null) st().seek(d.seekTime);
+      });
+      ms.setActionHandler("stop", () => st().setIsPlaying(false));
+    } catch {
+      // browser rejected an action — ignore
+    }
+    return () => {
+      try {
+        MEDIA_SESSION_ACTIONS.forEach((a) => ms.setActionHandler(a, null));
+      } catch {
+        // noop
+      }
+    };
+  }, []);
+
+  // Position state so remote displays render an accurate progress bar
+  useEffect(() => {
+    pushPositionState(audioRef.current);
+  }, [duration, seekNonce, playbackRate]);
+
   // Time update → sleep timer + AB repeat handled here
   const sleepFired = useRef(false);
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    let lastPosSent = 0;
     const onTime = () => {
       const t = audio.currentTime;
+      // Media Session position (throttled) — car / lock-screen progress bars
+      if (Math.abs(t - lastPosSent) > 0.8) {
+        lastPosSent = t;
+        pushPositionState(audio);
+      }
       // AB repeat loop
       const { a, b } = usePlayerStore.getState().abRepeat;
       if (a !== null && b !== null && t >= b) {

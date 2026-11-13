@@ -21,9 +21,11 @@ import {
   Volume2,
   Disc3,
   AudioLines,
+  Car,
   MoreHorizontal,
   SearchX,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,6 +89,7 @@ export function AndroidPlayer() {
   const likedTrackIds = usePlayerStore((s) => s.likedTrackIds);
   const toggleLike = usePlayerStore((s) => s.toggleLike);
   const shuffle = usePlayerStore((s) => s.shuffle);
+  const autoConnected = usePlayerStore((s) => s.autoConnected);
   const track = useCurrentTrack();
   const allTracks = useAllTracks();
 
@@ -94,6 +97,18 @@ export function AndroidPlayer() {
   const [sheet, setSheet] = useState<Sheet>("none");
   const [actionsTrackId, setActionsTrackId] = useState<string | null>(null);
   const [searchQ, setSearchQ] = useState("");
+
+  // Simulated Android Auto handshake — phone searches, then projects to the car display
+  const connectAuto = () => {
+    if (autoConnected) return;
+    toast("Searching for Android Auto head units…");
+    setTimeout(() => {
+      usePlayerStore.getState().setAutoConnected(true);
+      toast.success("Connected to car display", {
+        description: "Android Auto is projecting Music Player to your car",
+      });
+    }, 900);
+  };
 
   const activeViewLabels: Partial<Record<View, string>> = {
     artist: "Artist",
@@ -128,6 +143,11 @@ export function AndroidPlayer() {
       <div className="flex items-center justify-between px-5 py-2 text-[11px] font-medium text-zinc-300">
         <span>9:41</span>
         <div className="flex items-center gap-1">
+          {autoConnected && (
+            <span className="rounded-full bg-[color:var(--accent)] px-1.5 py-0.5 text-[9px] font-bold text-zinc-950">
+              AUTO
+            </span>
+          )}
           <span className="text-[9px]">5G</span>
           <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor">
             <path d="M2 22h2v-6H2v6zm5 0h2V10H7v12zm5 0h2V6h-2v16zm5 0h2V2h-2v20z" />
@@ -162,6 +182,16 @@ export function AndroidPlayer() {
             </div>
           )}
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 text-zinc-300"
+              onClick={connectAuto}
+              aria-label="Connect to Android Auto"
+              title="Connect to Android Auto"
+            >
+              <Car className="h-5 w-5" />
+            </Button>
             <DeviceMenu />
             <Button
               variant="ghost"

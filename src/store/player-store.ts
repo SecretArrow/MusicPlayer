@@ -16,6 +16,7 @@ import {
 import { THEMES } from "@/data/themes";
 
 export type RepeatMode = "off" | "all" | "one";
+export type AutoView = "nowplaying" | "browse" | "queue";
 export type View =
   | "home" | "search" | "library" | "nowplaying" | "queue" | "lyrics"
   | "artist" | "album" | "genre" | "recent" | "stats";
@@ -83,6 +84,8 @@ interface PlayerState {
   // UI state
   activeView: View;
   uiMode: "pc" | "android";
+  autoConnected: boolean; // Android Auto projection
+  autoView: AutoView; // screen shown on the car head unit
   activePlaylistId: string | null;
   activeArtistId: string | null;
   activeAlbumId: string | null;
@@ -149,6 +152,8 @@ interface PlayerState {
   // Actions — UI
   setActiveView: (v: View) => void;
   setUiMode: (m: "pc" | "android") => void;
+  setAutoConnected: (v: boolean) => void;
+  setAutoView: (v: AutoView) => void;
   setActivePlaylist: (id: string | null) => void;
   setActiveArtist: (id: string | null) => void;
   setActiveAlbum: (id: string | null) => void;
@@ -244,6 +249,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   activeView: "home",
   uiMode: "pc",
+  autoConnected: false,
+  autoView: "nowplaying",
   activePlaylistId: null,
   activeArtistId: null,
   activeAlbumId: null,
@@ -465,6 +472,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   setActiveView: (v) => set({ activeView: v }),
   setUiMode: (m) => set({ uiMode: m }),
+  setAutoConnected: (v) => set({ autoConnected: v }),
+  setAutoView: (v) => set({ autoView: v }),
   setActivePlaylist: (id) => set({ activePlaylistId: id }),
   setActiveArtist: (id) => set({ activeArtistId: id, activeView: id ? "artist" : get().activeView }),
   setActiveAlbum: (id) => set({ activeAlbumId: id, activeView: id ? "album" : get().activeView }),

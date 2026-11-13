@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { getTheme } from "@/data/themes";
 import { PcPlayer } from "./pc-player";
 import { AndroidPlayer } from "./android-player";
+import { AndroidAutoOverlay } from "./android-auto";
 import { AudioController } from "./audio-controller";
 import { SettingsDialog } from "./settings-dialog";
 import { ShortcutsDialog, useKeyboardShortcuts } from "./keyboard-shortcuts";
@@ -23,6 +24,7 @@ const emptySubscribe = () => () => {};
 export function MusicPlayerApp() {
   const mode = usePlayerStore((s) => s.uiMode);
   const setUiMode = usePlayerStore((s) => s.setUiMode);
+  const autoConnected = usePlayerStore((s) => s.autoConnected);
   const accent = usePlayerStore((s) => s.accent);
   const themeKey = usePlayerStore((s) => s.themeKey);
 
@@ -69,6 +71,9 @@ export function MusicPlayerApp() {
       <SettingsDialog />
       <ShortcutsDialog />
       <ShareDialog />
+
+      {/* Android Auto head unit projection (Android mode) */}
+      {mode === "android" && autoConnected && <AndroidAutoOverlay />}
 
       {/* Floating mode switcher — Android mode only (PC has toolbar buttons) */}
       {mode === "android" && (
