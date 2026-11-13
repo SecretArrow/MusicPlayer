@@ -5,7 +5,7 @@ import { Monitor, Smartphone } from "lucide-react";
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 import { getTheme } from "@/data/themes";
-import { PcPlayer } from "./pc-player";
+import { ThemeLayoutSwitch } from "./layouts";
 import { AndroidPlayer } from "./android-player";
 import { AndroidAutoOverlay } from "./android-auto";
 import { AudioController } from "./audio-controller";
@@ -102,9 +102,9 @@ export function MusicPlayerApp() {
           Loading player…
         </div>
       ) : mode === "pc" ? (
-        /* PC mode — full viewport desktop app */
+        /* PC mode — full viewport desktop app; the active theme picks the layout */
         <div className="h-full w-full">
-          <PcPlayer />
+          <ThemeLayoutSwitch />
         </div>
       ) : (
         /* Android mode — phone frame centered on dark backdrop */

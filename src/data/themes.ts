@@ -10,11 +10,30 @@
  * themes, and `--accent` provides each theme's highlight color.
  */
 
+/**
+ * Each theme maps to a full LAYOUT variant — themes are not just colors.
+ * Every layout repositions the nav, the player controls, the library and
+ * uses its own icon set & typography (see src/components/music-player/layouts).
+ */
+export type ThemeLayout =
+  | "classic" // sidebar left + bottom player bar (Midnight / Monochrome / Daylight)
+  | "glass" // top pill nav, floating frosted panels, control pill (Aurora)
+  | "vinyl" // turntable side panel with spinning record (Sunset)
+  | "cassette" // retro tape deck with reels + chunky keys (Rosewood)
+  | "cyber" // neon HUD terminal, monospace, clipped corners (Violet Night)
+  | "focus" // immersive stage, no sidebar, bottom dock (Ocean)
+  | "mosaic" // bento tile dashboard (Forest)
+  | "broadcast"; // radio station console with tuner dial (Coffee)
+
 export interface PlayerTheme {
   key: string;
   label: string;
   description: string;
   dark: boolean;
+  /** Which layout variant this theme renders */
+  layout: ThemeLayout;
+  /** Short human label for the layout shown in the theme picker */
+  layoutLabel: string;
   /** Default accent used for highlights (store accent is set to this on switch) */
   accent: string;
   /** [background, surface, accent] — used by the theme picker preview */
@@ -41,6 +60,8 @@ export const THEMES: PlayerTheme[] = [
     label: "Midnight",
     description: "Deep charcoal with emerald glow — the original look",
     dark: true,
+    layout: "classic",
+    layoutLabel: "Classic · sidebar + bottom bar",
     accent: "#10B981",
     swatch: ["#09090B", "#18181B", "#10B981"],
     vars: {},
@@ -48,8 +69,10 @@ export const THEMES: PlayerTheme[] = [
   {
     key: "aurora",
     label: "Aurora",
-    description: "Arctic navy night under a cyan shimmer",
+    description: "Glass deck — floating frosted panels under an arctic shimmer",
     dark: true,
+    layout: "glass",
+    layoutLabel: "Glass deck · top nav + floating pill",
     accent: "#22D3EE",
     swatch: ["#070B14", "#101B2D", "#22D3EE"],
     vars: zinc([
@@ -60,8 +83,10 @@ export const THEMES: PlayerTheme[] = [
   {
     key: "sunset",
     label: "Sunset",
-    description: "Warm ember browns with molten amber highlights",
+    description: "Vinyl lounge — spinning turntable beside ember-toned shelves",
     dark: true,
+    layout: "vinyl",
+    layoutLabel: "Vinyl lounge · turntable side panel",
     accent: "#F59E0B",
     swatch: ["#140C07", "#2A1A0F", "#F59E0B"],
     vars: zinc([
@@ -72,8 +97,10 @@ export const THEMES: PlayerTheme[] = [
   {
     key: "rosewood",
     label: "Rosewood",
-    description: "Velvet maroon tones with a rose neon edge",
+    description: "Cassette deck — velvet maroon hi-fi with chunky tape keys",
     dark: true,
+    layout: "cassette",
+    layoutLabel: "Cassette deck · reels + hi-fi keys",
     accent: "#FB7185",
     swatch: ["#12070B", "#2A0F19", "#FB7185"],
     vars: zinc([
@@ -84,8 +111,10 @@ export const THEMES: PlayerTheme[] = [
   {
     key: "violet",
     label: "Violet Night",
-    description: "Cosmic purple dusk with soft lavender text",
+    description: "Neon terminal — monospace HUD with clipped corners & scanlines",
     dark: true,
+    layout: "cyber",
+    layoutLabel: "Neon terminal · HUD console",
     accent: "#A78BFA",
     swatch: ["#0B0714", "#1A1230", "#A78BFA"],
     vars: zinc([
@@ -96,8 +125,10 @@ export const THEMES: PlayerTheme[] = [
   {
     key: "ocean",
     label: "Ocean",
-    description: "Abyssal navy depths with sky-blue currents",
+    description: "Wave focus — immersive center stage with a bottom dock",
     dark: true,
+    layout: "focus",
+    layoutLabel: "Wave focus · immersive stage + dock",
     accent: "#38BDF8",
     swatch: ["#050B12", "#0C1E30", "#38BDF8"],
     vars: zinc([
@@ -108,8 +139,10 @@ export const THEMES: PlayerTheme[] = [
   {
     key: "forest",
     label: "Forest",
-    description: "Pine-black greens lit by lime fireflies",
+    description: "Bento garden — tile dashboard among pine-black greens",
     dark: true,
+    layout: "mosaic",
+    layoutLabel: "Bento garden · tile dashboard",
     accent: "#84CC16",
     swatch: ["#070D08", "#112113", "#84CC16"],
     vars: zinc([
@@ -122,6 +155,8 @@ export const THEMES: PlayerTheme[] = [
     label: "Monochrome",
     description: "Pure grayscale — let the music do the talking",
     dark: true,
+    layout: "classic",
+    layoutLabel: "Classic · sidebar + bottom bar",
     accent: "#FFFFFF",
     swatch: ["#0A0A0A", "#1F1F1F", "#FFFFFF"],
     vars: zinc([
@@ -132,8 +167,10 @@ export const THEMES: PlayerTheme[] = [
   {
     key: "coffee",
     label: "Coffee",
-    description: "Roasted espresso browns with caramel cream",
+    description: "Radio console — espresso studio with an ON AIR broadcast dial",
     dark: true,
+    layout: "broadcast",
+    layoutLabel: "Radio console · tuner + studio",
     accent: "#E8A33D",
     swatch: ["#100B07", "#241A11", "#E8A33D"],
     vars: zinc([
@@ -146,6 +183,8 @@ export const THEMES: PlayerTheme[] = [
     label: "Daylight",
     description: "Clean light mode with an indigo accent",
     dark: false,
+    layout: "classic",
+    layoutLabel: "Classic · sidebar + bottom bar",
     accent: "#6366F1",
     swatch: ["#FFFFFF", "#E7E7EB", "#6366F1"],
     vars: {
