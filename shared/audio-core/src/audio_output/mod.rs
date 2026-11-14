@@ -32,7 +32,7 @@ pub enum OutputError {
     Build(#[from] cpal::BuildStreamError),
     /// Playing the stream failed.
     #[error("stream play error: {0}")]
-    Play(#[from] cpal::PlayError),
+    Play(#[from] cpal::PlayStreamError),
 }
 
 /// The CPAL backend.
@@ -44,7 +44,12 @@ pub struct CpalBackend {
 
 impl CpalBackend {
     /// Build the backend, picking the default output device.
-    pub fn new(controller: Arc<PlaybackController>) -> Result<Self, OutputError> {
+    ///
+    /// Returns a shared handle. One additional `Arc` reference is leaked
+    /// internally so the CPAL stream (and its realtime thread) stays alive
+    /// for the whole process — dropping the returned handle cannot stop
+    /// playback.
+    pub fn new(controller: Arc<PlaybackController>) -> Result<Arc<Self>, OutputError> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -60,12 +65,8 @@ impl CpalBackend {
             let f32cfg = configs
                 .filter(|c| c.sample_format() == SampleFormat::F32)
                 .max_by(|a, b| a.max_sample_rate().cmp(&b.max_sample_rate()));
-            match f32cfg {
-                Some(cfg) => {
-                    let _ = cfg;
-                    // Fall through; build_stream below requests f32 explicitly.
-                }
-                None => return Err(OutputError::UnsupportedFormat(sample_format)),
+            if f32cfg.is_none() {
+                return Err(OutputError::UnsupportedFormat(sample_format));
             }
         }
 
@@ -82,13 +83,11 @@ impl CpalBackend {
         stream.play()?;
         *backend.stream.lock() = Some(stream);
 
-        // Keep the owned Arc alive for the process lifetime: the stream thread
-        // holds the callbacks; dropping it here would stop playback.
-        let inner = Arc::try_unwrap(backend)
-            .map_err(|_| OutputError::NoDevice("backend still shared".into()))?;
-        std::mem::forget(inner.stream);
+        // Leak one Arc reference — the Stream (and its realtime thread) must
+        // never be dropped; playback lasts for the whole process lifetime.
+        std::mem::forget(Arc::clone(&backend));
 
-        Ok(inner)
+        Ok(backend)
     }
 
     /// Update EQ chain (called when EQ settings change).
