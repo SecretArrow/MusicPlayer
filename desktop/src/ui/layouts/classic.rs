@@ -66,7 +66,7 @@ fn draw_track_list(
     let (text, muted) = (t.text_color(), t.text_muted_color());
     let entries = library_entries(s, 12);
     let row_h = 40.0;
-    let max_rows = (((list_bottom - list_top) / row_h) as usize).min(12).max(1);
+    let max_rows = (((list_bottom - list_top) / row_h) as usize).clamp(1, 12);
     let list_w = list_r - list_x;
     for (i, e) in entries.iter().take(max_rows).enumerate() {
         let y = list_top + i as f64 * row_h;

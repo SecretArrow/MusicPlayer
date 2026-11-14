@@ -5,6 +5,8 @@
 //! so this module renders 8 distinct chrome arrangements driven by the same
 //! app state.
 
+#![allow(dead_code)] // widget library: some helpers land before their layouts
+
 pub mod layouts;
 pub mod painter;
 pub mod text;
@@ -44,6 +46,7 @@ pub enum UiAction {
 
 impl UiAction {
     /// Stable debug label (used by tests + logs).
+    #[allow(dead_code)]
     pub fn label(&self) -> &'static str {
         match self {
             UiAction::SetView(_) => "set_view",
@@ -89,7 +92,7 @@ pub fn fraction_in_rect(x: f64, rect: Rect) -> f64 {
 }
 
 /// Topmost region containing the point (regions are emitted back-to-front).
-pub fn hit_test<'a>(regions: &'a [HitRegion], x: f64, y: f64) -> Option<&'a HitRegion> {
+pub fn hit_test(regions: &[HitRegion], x: f64, y: f64) -> Option<&HitRegion> {
     regions
         .iter()
         .rev()

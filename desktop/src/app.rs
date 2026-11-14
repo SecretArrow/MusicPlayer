@@ -22,9 +22,11 @@ pub struct AppState {
     pub theme: RwLock<Theme>,
     /// Current view: home / library / playlists / now playing.
     pub view: RwLock<View>,
-    /// Whether the EQ panel is open.
+    /// Whether the EQ panel is open (panel rendering lands with Settings view).
+    #[allow(dead_code)]
     pub show_eq: RwLock<bool>,
-    /// Whether the queue panel is open.
+    /// Whether the queue panel is open (panel rendering lands with Queue view).
+    #[allow(dead_code)]
     pub show_queue: RwLock<bool>,
     /// Logical window size (DPI-independent).
     pub window_size: RwLock<(f32, f32)>,
@@ -44,8 +46,10 @@ pub struct AppState {
 }
 
 /// Top-level view enum — mirrors the web app's `View`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[allow(dead_code)] // mirrors the full web app view set; more views land later
 pub enum View {
+    #[default]
     Home,
     Library,
     Playlists,
@@ -57,12 +61,6 @@ pub enum View {
     Genre,
     Stats,
     Settings,
-}
-
-impl Default for View {
-    fn default() -> Self {
-        View::Home
-    }
 }
 
 impl AppState {

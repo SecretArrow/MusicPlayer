@@ -6,6 +6,8 @@
 //! glyph ids and hmtx for advances. That is enough for the Latin UI text this
 //! player needs and avoids pulling a full HarfBuzz-shaped stack.
 
+#![allow(dead_code)] // font family surface covers the web app's stacks
+
 use std::sync::Arc;
 
 use vello::peniko::{Blob, Font as PenikoFont};

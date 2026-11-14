@@ -232,7 +232,12 @@ impl ApplicationHandler for VelloApp {
     }
 }
 
-fn dispatch(action: &UiAction, fraction: f64, state: &Arc<AppState>, event_loop: &ActiveEventLoop) {
+fn dispatch(
+    action: &UiAction,
+    fraction: f64,
+    state: &Arc<AppState>,
+    _event_loop: &ActiveEventLoop,
+) {
     match action {
         UiAction::SetView(v) => *state.view.write() = *v,
         UiAction::TogglePlay => match state.controller.state() {
@@ -293,15 +298,15 @@ fn dispatch(action: &UiAction, fraction: f64, state: &Arc<AppState>, event_loop:
     }
 }
 
-fn handle_shortcut(code: KeyCode, state: &Arc<AppState>, event_loop: &ActiveEventLoop) {
+fn handle_shortcut(code: KeyCode, state: &Arc<AppState>, _event_loop: &ActiveEventLoop) {
     match code {
-        KeyCode::Space => dispatch(&UiAction::TogglePlay, 0.0, state, event_loop),
-        KeyCode::ArrowRight => dispatch(&UiAction::Next, 0.0, state, event_loop),
-        KeyCode::ArrowLeft => dispatch(&UiAction::Prev, 0.0, state, event_loop),
-        KeyCode::KeyS => dispatch(&UiAction::ToggleShuffle, 0.0, state, event_loop),
-        KeyCode::KeyR => dispatch(&UiAction::CycleRepeat, 0.0, state, event_loop),
-        KeyCode::KeyM => dispatch(&UiAction::ToggleMute, 0.0, state, event_loop),
-        KeyCode::KeyT => dispatch(&UiAction::NextTheme, 0.0, state, event_loop),
+        KeyCode::Space => dispatch(&UiAction::TogglePlay, 0.0, state, _event_loop),
+        KeyCode::ArrowRight => dispatch(&UiAction::Next, 0.0, state, _event_loop),
+        KeyCode::ArrowLeft => dispatch(&UiAction::Prev, 0.0, state, _event_loop),
+        KeyCode::KeyS => dispatch(&UiAction::ToggleShuffle, 0.0, state, _event_loop),
+        KeyCode::KeyR => dispatch(&UiAction::CycleRepeat, 0.0, state, _event_loop),
+        KeyCode::KeyM => dispatch(&UiAction::ToggleMute, 0.0, state, _event_loop),
+        KeyCode::KeyT => dispatch(&UiAction::NextTheme, 0.0, state, _event_loop),
         KeyCode::Escape => *state.view.write() = View::Home,
         _ => {}
     }

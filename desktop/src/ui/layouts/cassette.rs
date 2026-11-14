@@ -29,6 +29,7 @@ fn on_accent(accent: Color) -> Color {
     }
 }
 
+#[allow(dead_code)] // per-layout backdrop hook; called by future dispatch variants
 pub fn paint_background(p: &mut Painter, t: &Theme, w: f64, h: f64) {
     // Subtle top-lit gradient wash.
     p.fill_gradient_v(

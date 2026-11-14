@@ -1,12 +1,13 @@
 //! Painter — a thin convenience layer over `vello::Scene` with the drawing
 //! primitives + vector icons used by the layouts.
 
+#![allow(dead_code)] // icon library consumed by layouts incrementally
+
 use vello::kurbo::{Affine, BezPath, Circle, Rect, RoundedRect, Stroke};
 use vello::peniko::{Brush, Color, Fill, Gradient};
 use vello::Scene;
 
 use super::text::{shape, FontBook, FontFamily};
-use crate::theme::Theme;
 
 /// Everything a layout renderer needs to draw.
 pub struct Painter<'s, 'f> {
@@ -91,6 +92,7 @@ impl<'s, 'f> Painter<'s, 'f> {
 
     /// Draw text with the baseline at (`x`, `y`). Returns the advance width.
     /// Skips silently when the family is unavailable.
+    #[allow(clippy::too_many_arguments)]
     pub fn text(
         &mut self,
         family: FontFamily,
@@ -119,6 +121,7 @@ impl<'s, 'f> Painter<'s, 'f> {
 
     /// Draw text clipped to `max_width` (truncates with an ellipsis).
     /// Returns the drawn width.
+    #[allow(clippy::too_many_arguments)]
     pub fn text_trunc(
         &mut self,
         family: FontFamily,
@@ -144,6 +147,7 @@ impl<'s, 'f> Painter<'s, 'f> {
     }
 
     /// Horizontally centered text; `cx` is the center line.
+    #[allow(clippy::too_many_arguments)]
     pub fn text_centered(
         &mut self,
         family: FontFamily,

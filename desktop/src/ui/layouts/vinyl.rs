@@ -99,7 +99,7 @@ pub fn render(p: &mut Painter, t: &Theme, s: &AppState, w: f64, h: f64) -> Vec<H
 
     let row_h = 40.0;
     let list_top = 92.0;
-    let max_rows = (((top - 12.0 - list_top) / row_h) as usize).min(12).max(1);
+    let max_rows = (((top - 12.0 - list_top) / row_h) as usize).clamp(1, 12);
     let list_w = list_r - list_x;
     for (i, e) in entries.iter().take(max_rows).enumerate() {
         let y = list_top + i as f64 * row_h;

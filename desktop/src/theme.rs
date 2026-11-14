@@ -27,6 +27,7 @@ pub enum Layout {
 
 /// A theme definition — mirrors the web app's `PlayerTheme`.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)] // full field set mirrors the web app; dark/description used by picker UI later
 pub struct Theme {
     pub key: &'static str,
     pub label: &'static str,
@@ -183,6 +184,7 @@ pub static THEMES: [Theme; 10] = [
 
 impl Theme {
     /// Look up by key.
+    #[allow(dead_code)] // used by the upcoming theme-picker view
     pub fn by_key(key: &str) -> Self {
         THEMES
             .iter()
