@@ -16,6 +16,11 @@ on:
       - '.github/workflows/ci-desktop.yml'
   workflow_dispatch:
 
+# Cancel stale in-flight builds for the same ref (branch/tag) on new pushes.
+concurrency:
+  group: ci-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -110,14 +115,25 @@ jobs:
           cp README.md "$staging/"
           tar czf ${{ matrix.artifact_name }}.tar.gz -C "$staging" .
 
+      # Non-blocking smoke test: keep `continue-on-error` so a Wine failure
+      # doesn't fail the job, but drop the inner `|| true` so the step's
+      # outcome still records the failure — the step below turns it into a
+      # visible warning annotation.
       - name: Wine smoke test (Windows binary on Linux runner)
+        id: wine
         if: matrix.os == 'ubuntu-latest'
         continue-on-error: true
         run: |
           sudo apt-get install -y wine
           # Cross-build the Windows binary so we can smoke-test it under Wine.
           rustup target add x86_64-pc-windows-gnu
-          cd desktop && cargo build --release --target x86_64-pc-windows-gnu || true
+          cd desktop && cargo build --release --target x86_64-pc-windows-gnu
+
+      - name: Warn if Wine smoke test failed
+        if: matrix.os == 'ubuntu-latest' && steps.wine.outcome == 'failure'
+        run: |
+          echo "::warning::Wine smoke test failed — the Windows cross-build was not verified under Wine. This is non-blocking, but should be investigated."
+          exit 0
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -145,6 +161,24 @@ jobs:
 
       - name: List artifacts
         run: find artifacts -type f
+
+      # Fail with a clear error if any expected release artifact is missing
+      # BEFORE creating the GitHub Release.
+      - name: Verify artifacts
+        run: |
+          status=0
+          for f in \
+            artifacts/musicplayer-desktop-x86_64-windows/musicplayer-desktop-x86_64-windows.zip \
+            artifacts/musicplayer-desktop-x86_64-linux/musicplayer-desktop-x86_64-linux.tar.gz \
+            artifacts/musicplayer-desktop-aarch64-macos/musicplayer-desktop-aarch64-macos.tar.gz; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Missing expected release artifact: $f"
+              status=1
+            else
+              echo "OK: $f"
+            fi
+          done
+          exit $status
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

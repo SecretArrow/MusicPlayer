@@ -1,8 +1,8 @@
 //! MusicPlayer — native desktop entry point.
 //!
-//! Bootstraps a Winit window, initializes the audio engine + playback
-//! controller, and runs the Vello render loop. The window event loop is
-//! the single source of truth for input + redraw.
+//! Bootstraps a Winit 0.30 event loop, initializes the audio engine +
+//! playback controller, and hands rendering to `render::VelloApp`.
+//! The event loop is the single source of truth for input + redraw.
 
 #![forbid(unsafe_op_in_unsafe_fn)]
 
@@ -20,32 +20,37 @@ fn main() {
         env!("CARGO_PKG_VERSION")
     );
 
-    // Build the audio engine + playback controller.
+    // Build the audio engine + playback controller + shared library.
     let queue = audio_core::queue::shared_queue(Vec::new());
-    let controller = audio_core::PlaybackController::new(queue);
+    let controller = audio_core::PlaybackController::new(queue.clone());
+    let library = Arc::new(parking_lot::RwLock::new(audio_core::Library::new()));
 
-    // Create the Winit event loop + window.
-    let event_loop = winit::event_loop::EventLoop::new().expect("failed to create event loop");
-    let window = winit::window::WindowBuilder::new()
-        .with_title("MusicPlayer")
-        .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 800.0))
-        .with_min_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0))
-        .build(&event_loop)
-        .expect("failed to create window");
-
-    // Initialize the CPAL audio backend.
-    let backend = match audio_core::audio_output::CpalBackend::new(controller.clone()) {
-        Ok(b) => Some(b),
-        Err(e) => {
-            log::error!("audio backend init failed: {}", e);
-            None
+    // Initialize the CPAL audio backend (feature "audio"; requires ALSA on Linux).
+    #[cfg(feature = "audio")]
+    {
+        match audio_core::audio_output::CpalBackend::new(controller.clone()) {
+            Ok(backend) => {
+                std::mem::forget(backend); // owns its own stream thread for app lifetime
+            }
+            Err(e) => {
+                log::error!("audio backend init failed: {e}");
+            }
         }
-    };
-    let _ = backend;
+    }
+    #[cfg(not(feature = "audio"))]
+    {
+        log::warn!("built without audio_output — playback will be silent");
+    }
 
     // Initialize the app state.
-    let app_state = Arc::new(app::AppState::new(controller));
+    let app_state = Arc::new(app::AppState::new(controller, queue, library));
 
-    // Run the Vello renderer.
-    pollster::block_on(render::run(event_loop, window, app_state));
+    // Winit 0.30: EventLoop<T> is generic; window creation happens in
+    // ApplicationHandler::resumed via create_window (no WindowBuilder).
+    let event_loop = winit::event_loop::EventLoop::builder()
+        .build()
+        .expect("failed to create event loop");
+
+    let mut handler = render::VelloApp::new(app_state);
+    event_loop.run_app(&mut handler).expect("event loop failed");
 }

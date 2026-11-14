@@ -55,6 +55,7 @@ fn enable_shuffle_preserves_current_and_disable_restores_order() {
 
     // next() walks the shuffled upcoming tracks exactly once each.
     let mut visited: Vec<String> = Vec::new();
+    let current_after_walk;
     {
         let mut g = q.write();
         while let Some(id) = g.next() {
@@ -62,8 +63,13 @@ fn enable_shuffle_preserves_current_and_disable_restores_order() {
             assert!(!visited.contains(&id), "next() revisited {id}");
             visited.push(id);
         }
+        current_after_walk = g.current_id().expect("non-empty queue").to_string();
     }
-    assert_eq!(visited.len(), 6, "walked only the tracks after the current one");
+    assert_eq!(
+        visited.len(),
+        6,
+        "walked only the tracks after the current one"
+    );
     for id in &visited {
         assert!(original.contains(id), "{id} came out of nowhere");
     }
@@ -72,11 +78,14 @@ fn enable_shuffle_preserves_current_and_disable_restores_order() {
         let mut g = q.write();
         g.disable_shuffle();
         assert_eq!(g.shuffle, ShuffleMode::Off);
-        assert_eq!(g.items, original, "disable_shuffle restores the original order");
+        assert_eq!(
+            g.items, original,
+            "disable_shuffle restores the original order"
+        );
         assert!(g.original_order.is_none(), "restore consumes the stash");
         assert_eq!(
-            g.current_id(),
-            Some("track-03"),
+            g.current_id().expect("non-empty queue"),
+            current_after_walk.as_str(),
             "current track preserved through enable→disable"
         );
     }
@@ -125,7 +134,9 @@ fn enqueue_play_next_remove_move_across_threads_without_deadlock() {
                 let removed = g.remove(6); // drops "t-05" -> len 11
                 let moved = g.move_item(1, 10); // "play-next" to the back
                 if removed.as_deref() != Some("t-05") {
-                    return Err(format!("remove(6) returned {removed:?}, expected Some(\"t-05\")"));
+                    return Err(format!(
+                        "remove(6) returned {removed:?}, expected Some(\"t-05\")"
+                    ));
                 }
                 if !moved {
                     return Err("move_item(1, 10) returned false".into());
@@ -184,12 +195,25 @@ fn enqueue_play_next_remove_move_across_threads_without_deadlock() {
     // Deterministic final state (only the writer mutated the queue).
     let g = q.read();
     let expected: Vec<String> = [
-        "t-00", "t-01", "t-02", "t-03", "t-04", "t-06", "t-07", "t-08", "t-09", "t-10", "play-next",
+        "t-00",
+        "t-01",
+        "t-02",
+        "t-03",
+        "t-04",
+        "t-06",
+        "t-07",
+        "t-08",
+        "t-09",
+        "t-10",
+        "play-next",
     ]
     .iter()
     .map(|s| s.to_string())
     .collect();
-    assert_eq!(g.items, expected, "final queue order after cross-thread ops");
+    assert_eq!(
+        g.items, expected,
+        "final queue order after cross-thread ops"
+    );
     assert_eq!(g.len(), 11);
     assert_eq!(g.current_id(), Some("t-00"));
     assert_eq!(g.repeat, RepeatMode::Off);

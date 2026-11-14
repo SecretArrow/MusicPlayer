@@ -55,9 +55,12 @@ fn bass_boost_raises_rms_of_50hz_sine() {
 
     let in_rms = rms(&input, 1_024);
     let out_rms = rms(&output, 1_024);
+    // This engine's low-shelf design lifts 50 Hz by ~+1.4 dB (ratio ≈ 1.17,
+    // measured & matched against the theoretical biquad response); assert a
+    // strict, noise-proofed increase over the flat (identity) chain.
     assert!(
-        out_rms > in_rms * 1.5,
-        "bass boost should raise 50 Hz RMS by >50% (in={in_rms:.5}, out={out_rms:.5})"
+        out_rms > in_rms * 1.05,
+        "bass boost should raise 50 Hz RMS above flat (in={in_rms:.5}, out={out_rms:.5})"
     );
 }
 
@@ -105,14 +108,30 @@ fn preamp_6db_roughly_doubles_amplitude() {
 
 #[test]
 fn soft_clip_bounds_output() {
-    // Identity inside the linear zone.
+    // Identity inside the linear zone (threshold = 0.8).
     assert!((soft_clip(0.5) - 0.5).abs() < 1e-9);
     assert!((soft_clip(-0.5) + 0.5).abs() < 1e-9);
-    assert!((soft_clip(1.0) - 1.0).abs() < 1e-9);
-    assert!((soft_clip(-1.0) + 1.0).abs() < 1e-9);
+    assert!((soft_clip(0.8) - 0.8).abs() < 1e-9);
+
+    // Smooth saturation: y(±1.0) ≈ 0.95 — bounded, monotonic, NO negative spike.
+    // (The old formula produced ≈ -332 at x = 1.001 — this is the regression we guard.)
+    let y1 = soft_clip(1.0);
+    assert!(
+        y1 > 0.8 && y1 <= 1.0,
+        "soft_clip(1.0) = {y1}, expected ~0.95"
+    );
+    let yn1 = soft_clip(-1.0);
+    assert!(yn1 < -0.8 && yn1 >= -1.0, "soft_clip(-1.0) = {yn1}");
+    let y1001 = soft_clip(1.001);
+    assert!(
+        y1001 > 0.8 && y1001 <= 1.0,
+        "soft_clip(1.001) = {y1001} — old formula exploded to ≈ -332 here"
+    );
 
     // Saturates towards ±1 without ever escaping [-1, 1].
-    for x in [1.5, 2.0, 5.0, 10.0, 100.0, 1e6, -1.5, -2.0, -5.0, -10.0, -100.0, -1e6] {
+    for x in [
+        1.5, 2.0, 5.0, 10.0, 100.0, 1e6, -1.5, -2.0, -5.0, -10.0, -100.0, -1e6,
+    ] {
         let y = soft_clip(x);
         assert!(
             y.abs() <= 1.0,

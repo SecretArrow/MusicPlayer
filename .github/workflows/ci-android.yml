@@ -16,6 +16,11 @@ on:
       - '.github/workflows/ci-android.yml'
   workflow_dispatch:
 
+# Cancel stale in-flight builds for the same ref (branch/tag) on new pushes.
+concurrency:
+  group: ci-android-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   JAVA_VERSION: '17'
@@ -28,6 +33,19 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      # `if:` conditions cannot reference `secrets.*` directly (the context is
+      # not allowed there), so we materialize the check into an env var that
+      # later steps can test via `env.SIGNING_READY`.
+      - name: Detect signing secrets
+        env:
+          ANDROID_KEYSTORE_ZIP_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_ZIP_PASSWORD" ]; then
+            echo "SIGNING_READY=yes" >> "$GITHUB_ENV"
+          else
+            echo "SIGNING_READY=no" >> "$GITHUB_ENV"
+          fi
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -57,7 +75,10 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "shared/audio-core -> target"
+          # This repo is a cargo workspace rooted at the repository root, so
+          # every crate (shared/audio-core, android/rust) shares <root>/target.
+          # Cache that target dir plus the shared cargo registry.
+          workspaces: "."
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -69,18 +90,70 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
 
+      - name: Configure NDK linker environment
+        run: |
+          # Plain `cargo build --target <android-triple>` needs the NDK clang
+          # wrappers as custom linkers. setup-android installed the NDK under
+          # $ANDROID_HOME/ndk/<version>; pick the newest and export one linker
+          # env var per Rust target triple (API level 24 == app minSdk).
+          NDK_ROOT="${ANDROID_NDK_ROOT:-$(ls -1d "$ANDROID_HOME"/ndk/* 2>/dev/null | sort -V | tail -1)}"
+          if [ ! -d "$NDK_ROOT" ]; then
+            echo "::error::No Android NDK found under $ANDROID_HOME/ndk"
+            exit 1
+          fi
+          echo "Using NDK: $NDK_ROOT"
+          TOOLCHAIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          API=24
+          {
+            echo "ANDROID_NDK_ROOT=$NDK_ROOT"
+            echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$TOOLCHAIN/aarch64-linux-android${API}-clang"
+            echo "CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER=$TOOLCHAIN/armv7a-linux-androideabi${API}-clang"
+            echo "CARGO_TARGET_I686_LINUX_ANDROID_LINKER=$TOOLCHAIN/i686-linux-android${API}-clang"
+            echo "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=$TOOLCHAIN/x86_64-linux-android${API}-clang"
+          } >> "$GITHUB_ENV"
+
       - name: Test shared audio-core
         working-directory: shared/audio-core
         run: cargo test --no-default-features --features decoder,metadata,effects --no-fail-fast
 
+      # Build the UniFFI bridge crate (android/rust), which links audio-core,
+      # as a cdylib for every ABI the app ships. Linkers come from the
+      # "Configure NDK linker environment" step. No `|| true` here: a failed
+      # ABI build must fail the job (the verify step below also enforces it).
       - name: Build Rust Android libraries (all ABIs)
         working-directory: android/rust
         run: |
-          for abi in aarch64 armv7 x86 x86_64; do
-            cargo build --release --target ${abi}-linux-android \
-              --manifest-path ../../shared/audio-core/Cargo.toml \
-              --features "decoder,metadata,effects" || true
+          for target in aarch64-linux-android armv7-linux-android i686-linux-android x86_64-linux-android; do
+            cargo build --release --target "$target"
           done
+
+      # Runs cargo-ndk (or plain cargo + NDK linkers) for aarch64 and invokes
+      # `uniffi-bindgen generate --library ... --language kotlin` in library
+      # mode. Produces android/app/src/main/kotlin/uniffi/musicplayer/*.kt,
+      # which Gradle picks up automatically for all following build steps.
+      - name: Generate UniFFI Kotlin bindings
+        working-directory: android/rust
+        env:
+          ANDROID_API_LEVEL: '24'
+        run: |
+          # The aarch64 cdylib was just built above — skip the redundant build.
+          SKIP_BUILD=1 ./generate-bindings.sh
+
+      # Fail loudly if any of the 4 ABIs is missing its cdylib.
+      - name: Verify Rust Android libs exist
+        run: |
+          status=0
+          for target in aarch64-linux-android armv7-linux-android i686-linux-android x86_64-linux-android; do
+            libs=$(ls target/$target/release/*.so 2>/dev/null || true)
+            if [ -z "$libs" ]; then
+              echo "::error::No .so produced for $target (expected target/$target/release/*.so)"
+              status=1
+            else
+              echo "$target:"
+              echo "$libs" | sed 's/^/  /'
+            fi
+          done
+          exit $status
 
       - name: Make gradlew executable
         working-directory: android
@@ -107,8 +180,28 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
+      # Decode the keystore archive BEFORE signing: prefer the
+      # ANDROID_KEYSTORE_ARCHIVE secret (base64-encoded zip), fall back to the
+      # repo path android/key-sign-apk.zip. The archive contents are never
+      # echoed or listed — only extracted in-place by the sign step.
+      - name: Prepare keystore archive
+        if: ${{ env.SIGNING_READY == 'yes' }}
+        env:
+          ANDROID_KEYSTORE_ARCHIVE: ${{ secrets.ANDROID_KEYSTORE_ARCHIVE }}
+        run: |
+          mkdir -p android
+          if [ -n "$ANDROID_KEYSTORE_ARCHIVE" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_ARCHIVE" | base64 --decode > android/key-sign-apk.zip
+            echo "Keystore archive decoded from secret ANDROID_KEYSTORE_ARCHIVE."
+          elif [ -f android/key-sign-apk.zip ]; then
+            echo "Using keystore archive from repository: android/key-sign-apk.zip"
+          else
+            echo "::error::Signing requested but no keystore archive found. Set the ANDROID_KEYSTORE_ARCHIVE secret (base64) or commit android/key-sign-apk.zip."
+            exit 1
+          fi
+
       - name: Sign split APKs (per-ABI)
-        if: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD != '' }}
+        if: ${{ env.SIGNING_READY == 'yes' }}
         working-directory: android
         env:
           KS_ZIP_PWD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
@@ -116,9 +209,9 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          # Extract keystore from the encrypted archive stored as a Secret.
+          # Extract keystore from the encrypted archive (password from Secret).
           mkdir -p .signing && cd .signing
-          printf '%s' "$KS_ZIP_PWD" | unzip -P "$KS_ZIP_PWD" ../key-sign-apk.zip
+          unzip -P "$KS_ZIP_PWD" ../key-sign-apk.zip
           KS_FILE=$(find . -name '*.jks' -o -name '*.keystore' | head -1)
           [ -n "$KS_FILE" ] || { echo "Keystore not found in archive"; exit 1; }
 
@@ -155,7 +248,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload signed per-ABI APKs
-        if: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD != '' }}
+        if: ${{ env.SIGNING_READY == 'yes' }}
         uses: actions/upload-artifact@v4
         with:
           name: musicplayer-android-signed-apks

@@ -9,7 +9,10 @@ repository = "https://github.com/SecretArrow/MusicPlayer"
 
 [lib]
 name = "audio_core"
-crate-type = ["lib", "staticlib", "cdylib", "rlib"]
+# NOTE: "lib" already emits an rlib; keeping an explicit "rlib" too makes
+# cargo build the rlib twice into the same path, triggering the
+# output-filename-collision panic (rust-lang/cargo#6313).
+crate-type = ["lib", "staticlib", "cdylib"]
 
 [features]
 default = ["decoder", "metadata", "effects"]

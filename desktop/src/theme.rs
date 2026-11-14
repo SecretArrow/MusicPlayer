@@ -2,12 +2,10 @@
 //!
 //! Each theme carries its color palette AND its layout variant, matching the
 //! web app's per-theme layout system. The native renderer dispatches to the
-//! matching `ui::layout::*` module based on `layout`.
-
-use serde::{Deserialize, Serialize};
+//! matching `ui::layouts::*` module based on `layout`.
 
 /// Layout variant — matches the web app's `ThemeLayout`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Layout {
     /// Sidebar left + bottom player bar (Midnight / Monochrome / Daylight).
     Classic,
@@ -28,14 +26,14 @@ pub enum Layout {
 }
 
 /// A theme definition — mirrors the web app's `PlayerTheme`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy)]
 pub struct Theme {
-    pub key: String,
-    pub label: String,
-    pub description: String,
+    pub key: &'static str,
+    pub label: &'static str,
+    pub description: &'static str,
     pub dark: bool,
     pub layout: Layout,
-    pub accent: [u8; 3], // RGB
+    pub accent: [u8; 3],
     pub background: [u8; 3],
     pub surface: [u8; 3],
     pub text: [u8; 3],
@@ -45,16 +43,16 @@ pub struct Theme {
 
 impl Default for Theme {
     fn default() -> Self {
-        THEMES[0].clone()
+        THEMES[0]
     }
 }
 
 /// All 10 built-in themes — same data as the web app.
 pub static THEMES: [Theme; 10] = [
     Theme {
-        key: "midnight".into(),
-        label: "Midnight".into(),
-        description: "Deep charcoal with emerald glow".into(),
+        key: "midnight",
+        label: "Midnight",
+        description: "Deep charcoal with emerald glow",
         dark: true,
         layout: Layout::Classic,
         accent: [0x10, 0xB9, 0x81],
@@ -65,9 +63,9 @@ pub static THEMES: [Theme; 10] = [
         border: [0x27, 0x27, 0x2A],
     },
     Theme {
-        key: "aurora".into(),
-        label: "Aurora".into(),
-        description: "Glass deck — floating frosted panels".into(),
+        key: "aurora",
+        label: "Aurora",
+        description: "Glass deck — floating frosted panels",
         dark: true,
         layout: Layout::Glass,
         accent: [0x22, 0xD3, 0xEE],
@@ -78,9 +76,9 @@ pub static THEMES: [Theme; 10] = [
         border: [0x1B, 0x2A, 0x44],
     },
     Theme {
-        key: "sunset".into(),
-        label: "Sunset".into(),
-        description: "Vinyl lounge — spinning turntable".into(),
+        key: "sunset",
+        label: "Sunset",
+        description: "Vinyl lounge — spinning turntable",
         dark: true,
         layout: Layout::Vinyl,
         accent: [0xF5, 0x9E, 0x0B],
@@ -91,9 +89,9 @@ pub static THEMES: [Theme; 10] = [
         border: [0x3D, 0x28, 0x17],
     },
     Theme {
-        key: "rosewood".into(),
-        label: "Rosewood".into(),
-        description: "Cassette deck — velvet maroon hi-fi".into(),
+        key: "rosewood",
+        label: "Rosewood",
+        description: "Cassette deck — velvet maroon hi-fi",
         dark: true,
         layout: Layout::Cassette,
         accent: [0xFB, 0x71, 0x85],
@@ -104,9 +102,9 @@ pub static THEMES: [Theme; 10] = [
         border: [0x3D, 0x15, 0x24],
     },
     Theme {
-        key: "violet".into(),
-        label: "Violet Night".into(),
-        description: "Neon terminal — monospace HUD".into(),
+        key: "violet",
+        label: "Violet Night",
+        description: "Neon terminal — monospace HUD",
         dark: true,
         layout: Layout::Cyber,
         accent: [0xA7, 0x8B, 0xFA],
@@ -117,9 +115,9 @@ pub static THEMES: [Theme; 10] = [
         border: [0x27, 0x1C, 0x48],
     },
     Theme {
-        key: "ocean".into(),
-        label: "Ocean".into(),
-        description: "Wave focus — immersive stage + dock".into(),
+        key: "ocean",
+        label: "Ocean",
+        description: "Wave focus — immersive stage + dock",
         dark: true,
         layout: Layout::Focus,
         accent: [0x38, 0xBD, 0xF8],
@@ -130,9 +128,9 @@ pub static THEMES: [Theme; 10] = [
         border: [0x13, 0x30, 0x4A],
     },
     Theme {
-        key: "forest".into(),
-        label: "Forest".into(),
-        description: "Bento garden — tile dashboard".into(),
+        key: "forest",
+        label: "Forest",
+        description: "Bento garden — tile dashboard",
         dark: true,
         layout: Layout::Mosaic,
         accent: [0x84, 0xCC, 0x16],
@@ -143,9 +141,9 @@ pub static THEMES: [Theme; 10] = [
         border: [0x1B, 0x33, 0x20],
     },
     Theme {
-        key: "mono".into(),
-        label: "Monochrome".into(),
-        description: "Pure grayscale".into(),
+        key: "mono",
+        label: "Monochrome",
+        description: "Pure grayscale",
         dark: true,
         layout: Layout::Classic,
         accent: [0xFF, 0xFF, 0xFF],
@@ -156,9 +154,9 @@ pub static THEMES: [Theme; 10] = [
         border: [0x30, 0x30, 0x30],
     },
     Theme {
-        key: "coffee".into(),
-        label: "Coffee".into(),
-        description: "Radio console — tuner + studio".into(),
+        key: "coffee",
+        label: "Coffee",
+        description: "Radio console — tuner + studio",
         dark: true,
         layout: Layout::Broadcast,
         accent: [0xE8, 0xA3, 0x3D],
@@ -169,9 +167,9 @@ pub static THEMES: [Theme; 10] = [
         border: [0x36, 0x28, 0x18],
     },
     Theme {
-        key: "daylight".into(),
-        label: "Daylight".into(),
-        description: "Clean light mode with indigo accent".into(),
+        key: "daylight",
+        label: "Daylight",
+        description: "Clean light mode with indigo accent",
         dark: false,
         layout: Layout::Classic,
         accent: [0x63, 0x66, 0xF1],
@@ -189,7 +187,93 @@ impl Theme {
         THEMES
             .iter()
             .find(|t| t.key == key)
-            .cloned()
-            .unwrap_or_else(|| THEMES[0].clone())
+            .copied()
+            .unwrap_or(THEMES[0])
+    }
+
+    fn color_of(slot: [u8; 3]) -> vello::peniko::Color {
+        vello::peniko::Color::rgb8(slot[0], slot[1], slot[2])
+    }
+
+    pub fn accent_color(&self) -> vello::peniko::Color {
+        Self::color_of(self.accent)
+    }
+
+    pub fn background_color(&self) -> vello::peniko::Color {
+        Self::color_of(self.background)
+    }
+
+    pub fn surface_color(&self) -> vello::peniko::Color {
+        Self::color_of(self.surface)
+    }
+
+    pub fn text_color(&self) -> vello::peniko::Color {
+        Self::color_of(self.text)
+    }
+
+    pub fn text_muted_color(&self) -> vello::peniko::Color {
+        Self::color_of(self.text_muted)
+    }
+
+    pub fn border_color(&self) -> vello::peniko::Color {
+        Self::color_of(self.border)
+    }
+
+    /// Index of this theme in the built-in list (for the next() helper).
+    pub fn index(&self) -> usize {
+        THEMES.iter().position(|t| t.key == self.key).unwrap_or(0)
+    }
+
+    /// Cycle to the next built-in theme (wraps around).
+    pub fn next(&self) -> Self {
+        THEMES[(self.index() + 1) % THEMES.len()]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ten_themes_exist() {
+        assert_eq!(THEMES.len(), 10);
+    }
+
+    #[test]
+    fn by_key_resolves_and_falls_back() {
+        assert_eq!(Theme::by_key("ocean").key, "ocean");
+        assert_eq!(Theme::by_key("nonexistent").key, "midnight");
+        assert_eq!(Theme::default().key, "midnight");
+    }
+
+    #[test]
+    fn layouts_cover_all_variants() {
+        let mut seen = std::collections::HashSet::new();
+        for t in THEMES.iter() {
+            seen.insert(t.layout);
+        }
+        assert_eq!(seen.len(), 8, "all 8 layout variants must be covered");
+    }
+
+    #[test]
+    fn daylight_is_the_only_light_theme() {
+        for t in THEMES.iter() {
+            assert_eq!(t.dark, t.key != "daylight");
+        }
+    }
+
+    #[test]
+    fn next_cycles_through_all_ten() {
+        let mut t = Theme::default();
+        let mut visited = 0;
+        loop {
+            t = t.next();
+            visited += 1;
+            if t.key == Theme::default().key {
+                break;
+            }
+            assert!(visited < 100);
+        }
+        assert_eq!(visited, 10);
     }
 }

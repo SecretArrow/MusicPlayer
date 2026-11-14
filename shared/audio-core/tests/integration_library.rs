@@ -27,7 +27,12 @@ fn scan_reports_file_failed_and_done_for_invalid_audio_file() {
 
     let events: Vec<ScanProgress> = rx.iter().collect();
     assert!(
-        matches!(&events[0], ScanProgress::Started { total_files: Some(1) }),
+        matches!(
+            &events[0],
+            ScanProgress::Started {
+                total_files: Some(1)
+            }
+        ),
         "only the .mp3 should be picked up; first event: {:?}",
         events[0]
     );
@@ -40,8 +45,14 @@ fn scan_reports_file_failed_and_done_for_invalid_audio_file() {
         })
         .collect();
     assert_eq!(failures.len(), 1, "expected exactly one FileFailed event");
-    assert!(failures[0].0.ends_with("fake.mp3"), "failure names the file");
-    assert!(!failures[0].1.is_empty(), "failure carries an error message");
+    assert!(
+        failures[0].0.ends_with("fake.mp3"),
+        "failure names the file"
+    );
+    assert!(
+        !failures[0].1.is_empty(),
+        "failure carries an error message"
+    );
 
     match events.last() {
         Some(ScanProgress::Done { indexed, failed }) => {
@@ -73,9 +84,17 @@ fn scan_empty_dir_emits_done_with_zeroes() {
 
     assert_eq!(indexed, 0);
     let events: Vec<ScanProgress> = rx.iter().collect();
-    assert!(matches!(&events[0], ScanProgress::Started { total_files: Some(0) }));
+    assert!(matches!(
+        &events[0],
+        ScanProgress::Started {
+            total_files: Some(0)
+        }
+    ));
     assert!(matches!(
         events.last(),
-        Some(ScanProgress::Done { indexed: 0, failed: 0 })
+        Some(ScanProgress::Done {
+            indexed: 0,
+            failed: 0
+        })
     ));
 }

@@ -8,25 +8,31 @@ license = "MIT"
 repository = "https://github.com/SecretArrow/MusicPlayer"
 default-run = "musicplayer-desktop"
 
+[features]
+default = ["audio"]
+# CPAL audio output. Requires ALSA dev headers on Linux
+# (`sudo apt install libasound2-dev pkg-config`). Disable for UI-only builds:
+# `cargo check --no-default-features`
+audio = ["audio-core/audio_output"]
+
 [dependencies]
-audio-core = { path = "../shared/audio-core", features = ["decoder", "metadata", "effects", "audio_output"] }
+audio-core = { path = "../shared/audio-core", features = ["decoder", "metadata", "effects"] }
 # Window + event loop
 winit = "0.30"
 # Native 2D rendering (Vello GPU + CPU fallback)
 vello = "0.3"
+# Text layout for Vello
+parley = "0.2"
 # Async runtime for the UI thread (Vello needs it)
 pollster = "0.4"
 # Logging
 env_logger = "0.11"
 log = "0.4"
-# Window/screen info (DPI, multi-monitor)
-# (winit provides scale_factor; no extra dep needed)
+# Shared mutable state
+parking_lot = "0.12"
 
 # Resource embedding (assets bundled into the binary)
 include_dir = "0.7"
-
-[build-dependencies]
-# No special build steps for now (Vello is a regular Cargo dep).
 
 [[bin]]
 name = "musicplayer-desktop"

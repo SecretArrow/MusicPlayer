@@ -13,6 +13,11 @@ on:
       - '.github/workflows/ci-linux.yml'
   workflow_dispatch:
 
+# Cancel stale in-flight builds for the same ref (branch/tag) on new pushes.
+concurrency:
+  group: ci-linux-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
@@ -61,3 +66,13 @@ jobs:
       - name: Build docs
         working-directory: shared/audio-core
         run: cargo doc --no-deps --all-features
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      # Non-blocking for now: advisories may exist in the dependency tree and
+      # shouldn't gate CI until they are triaged. Flip to blocking (remove
+      # continue-on-error) once known advisories are resolved.
+      - name: Security audit (cargo audit)
+        continue-on-error: true
+        run: cargo audit

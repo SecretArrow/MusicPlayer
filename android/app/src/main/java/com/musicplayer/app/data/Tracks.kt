@@ -1,6 +1,5 @@
 package com.musicplayer.app.data
 
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 data class Track(
@@ -16,9 +15,24 @@ data class Track(
     val durationLabel: String
         get() = "${durationSecs / 60}:${(durationSecs % 60).toString().padStart(2, '0')}"
 
+    /** Gradient [start, end] colors parsed from the CSS hex pairs. */
     val gradientColors: List<Color>
-        get() = cover.map { Color(android.graphics.Color.parseColor(it)) }
+        get() = cover.flatMap { (start, end) ->
+            listOf(
+                Color(android.graphics.Color.parseColor(start)),
+                Color(android.graphics.Color.parseColor(end)),
+            )
+        }
+
+    /** First gradient color — the track's accent. */
+    val accentColor: Color
+        get() = gradientColors.first()
 }
+
+/** Mirrors the web app's `findTrack(id)`. */
+fun findTrackById(id: String): Track? = DemoTracks.firstOrNull { it.id == id }
+
+fun allTrackIds(): List<String> = DemoTracks.map { it.id }
 
 /**
  * Demo tracks — mirrors the web app's `src/data/music.ts` (8 SoundHelix tracks).

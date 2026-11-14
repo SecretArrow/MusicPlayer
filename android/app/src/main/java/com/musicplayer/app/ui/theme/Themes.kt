@@ -3,6 +3,7 @@ package com.musicplayer.app.ui.theme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -82,5 +83,6 @@ val BuiltInThemes: List<PlayerTheme> = listOf(
         textMuted = Color(0xFF83838D), border = Color(0xFFD6D6DC)),
 )
 
-// Need Color import at top-level.
-import androidx.compose.ui.graphics.Color
+/** Convenience lookup — mirrors the web app's `getTheme(key)`. */
+fun themeByKey(key: String): PlayerTheme =
+    BuiltInThemes.firstOrNull { it.key == key } ?: BuiltInThemes.first()

@@ -330,17 +330,20 @@ impl BiquadEq {
     }
 }
 
-/// Cubic soft-clipper — keeps the output sane when the EQ chain pushes
-/// beyond [-1, 1] without hard-clipping artifacts.
+/// Soft saturator — identity for |x| <= 0.8, smooth tanh-based saturation
+/// asymptotically approaching ±1 beyond the threshold. Monotonic, C1-continuous,
+/// and never produces the negative spikes a naive `1 - 1/(3·(x-1))` formula
+/// would produce just past the threshold.
 #[inline]
 pub fn soft_clip(x: f64) -> f64 {
-    if x > 1.0 {
-        1.0 - 1.0 / (3.0 * (x - 1.0 + 1e-9))
-    } else if x < -1.0 {
-        -1.0 + 1.0 / (3.0 * (-x - 1.0 + 1e-9))
-    } else {
-        x
+    const T: f64 = 0.8; // threshold where saturation begins
+    if x.abs() <= T {
+        return x;
     }
+    let sign = x.signum();
+    let a = x.abs() - T; // distance beyond threshold
+                         // y = T + (1-T)·tanh(a/(1-T)): equals T at a=0 with slope 1, asymptotes to ±1.
+    sign * (T + (1.0 - T) * (a / (1.0 - T)).tanh())
 }
 
 #[cfg(test)]
@@ -413,5 +416,39 @@ mod tests {
         assert!(soft_clip(2.0) < 1.0);
         assert!(soft_clip(-2.0) > -1.0);
         assert!((soft_clip(0.5) - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn soft_clip_is_monotonic_and_bounded_everywhere() {
+        // The old formula produced ~-332 at x≈1.001. Verify that zone is sane now.
+        for i in 0..2000 {
+            let x = -3.0 + (i as f64) * 0.003;
+            let y = soft_clip(x);
+            assert!(y.abs() <= 1.0, "unbounded at x={x}: y={y}");
+            assert!(!y.is_nan(), "NaN at x={x}");
+        }
+        // Monotonicity: y must not decrease as x increases.
+        let mut prev = soft_clip(-3.0);
+        for i in 1..2000 {
+            let x = -3.0 + (i as f64) * 0.003;
+            let y = soft_clip(x);
+            assert!(y >= prev - 1e-12, "non-monotonic at x={x}: {prev} -> {y}");
+            prev = y;
+        }
+        // Continuity at the threshold: no jump around |x|=0.8 or |x|=1.
+        for probe in [0.79, 0.8, 0.81, 0.99, 1.0, 1.01, 1.2] {
+            for d in [-0.001, 0.0, 0.001] {
+                let y = soft_clip(probe + d);
+                assert!(y.abs() <= 1.0 && !y.is_nan());
+            }
+        }
+        // Identity inside threshold.
+        assert!((soft_clip(0.8) - 0.8).abs() < 1e-12);
+        // Smooth saturation beyond: y(1.0) should be ~0.95, NOT negative.
+        let y1 = soft_clip(1.0);
+        assert!(y1 > 0.8 && y1 <= 1.0, "y(1.0)={y1}");
+        // Asymptote approaches ±1.
+        assert!(soft_clip(10.0) > 0.98);
+        assert!(soft_clip(-10.0) < -0.98);
     }
 }

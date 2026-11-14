@@ -1,48 +1,33 @@
 package com.musicplayer.app.ui
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.musicplayer.app.ui.screens.HomeScreen
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.musicplayer.app.ui.navigation.MusicPlayerNav
+import com.musicplayer.app.ui.theme.ThemeManager
+import com.musicplayer.app.viewmodel.PlayerViewModel
 
 /**
  * Top-level app composable.
  *
- * Hosts the navigation graph + the persistent bottom player bar.
+ * Wraps the navigation host in [ThemeManager.applyTheme] using the currently
+ * selected theme (defaults to Midnight, restored from DataStore by
+ * [PlayerViewModel]). Every screen reads `MaterialTheme.colorScheme`, so a
+ * theme switch re-skins the whole player instantly — same strategy as the
+ * web app's CSS variable overrides.
  */
 @Composable
-fun MusicPlayerApp() {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
-    ) {
-        Scaffold(
-            bottomBar = { PlayerBottomBar() },
-        ) { innerPadding ->
-            Box(modifier = Modifier.padding(innerPadding)) {
-                HomeScreen()
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlayerBottomBar() {
-    Surface(color = MaterialTheme.colorScheme.surface) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(androidx.compose.foundation.layout.PaddingValues(16.dp)),
-            contentAlignment = Alignment.Center,
+fun MusicPlayerApp(viewModel: PlayerViewModel = viewModel()) {
+    val theme = ThemeManager.currentTheme
+    ThemeManager.applyTheme(theme) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
         ) {
-            Text("Player bar", color = MaterialTheme.colorScheme.onSurface)
+            MusicPlayerNav(viewModel = viewModel)
         }
     }
 }
