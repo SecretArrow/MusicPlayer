@@ -26,12 +26,12 @@ fn main() {
     let library = Arc::new(parking_lot::RwLock::new(audio_core::Library::new()));
 
     // Initialize the CPAL audio backend (feature "audio"; requires ALSA on Linux).
-    // The backend leaks one Arc reference internally so its stream thread
-    // outlives this scope; dropping the returned handle is safe.
+    // The stream is leaked internally by AudioOutput::new and runs for the
+    // whole process; dropping the returned handle does not stop playback.
     #[cfg(feature = "audio")]
     {
-        match audio_core::audio_output::CpalBackend::new(controller.clone()) {
-            Ok(_backend) => {}
+        match audio_core::audio_output::AudioOutput::new(controller.clone()) {
+            Ok(_audio) => {}
             Err(e) => {
                 log::error!("audio backend init failed: {e}");
             }

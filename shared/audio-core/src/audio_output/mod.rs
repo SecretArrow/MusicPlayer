@@ -9,9 +9,10 @@
 //!
 //! Thread-safety: cpal's `Stream` is deliberately `!Send`/`!Sync` on some
 //! platforms (`NotSendSyncAcrossAllPlatforms`). Therefore the realtime
-//! callback only captures a `CallbackState` (Send + Sync: controller handle
-//! + EQ mutex), while the `Stream` handle itself stays on the thread that
-//! created it and is never moved across threads.
+//! callback only captures a `CallbackState` (Send + Sync), and the `Stream`
+//! itself is intentionally leaked (`std::mem::forget`) so it — and its audio
+//! thread — live for the whole process. The public handle (`AudioOutput`)
+//! contains no `Stream` and is freely Send + Sync.
 
 use crate::effects::BiquadEq;
 use crate::playback::PlaybackController;
@@ -49,22 +50,19 @@ struct CallbackState {
     eq_chain: Mutex<BiquadEq>,
 }
 
-/// The CPAL backend handle. Contains the `Stream`, which is `!Send` on some
-/// platforms — keep this on the thread that created it.
-pub struct CpalBackend {
+/// Public handle for a running CPAL output stream.
+///
+/// Contains no `Stream` (which is platform-restricted to !Send), so this is
+/// freely Send + Sync and safe to hold from any thread. The actual stream is
+/// leaked internally and lives for the whole process; dropping this handle
+/// does not stop playback.
+pub struct AudioOutput {
     state: Arc<CallbackState>,
-    #[allow(dead_code)]
-    stream: Stream,
 }
 
-impl CpalBackend {
-    /// Build the backend, picking the default output device.
-    ///
-    /// Returns a shared handle. One additional `Arc` reference is leaked
-    /// internally so the CPAL stream (and its realtime thread) stays alive
-    /// for the whole process — dropping the returned handle cannot stop
-    /// playback.
-    pub fn new(controller: Arc<PlaybackController>) -> Result<Arc<Self>, OutputError> {
+impl AudioOutput {
+    /// Start audio output on the default device.
+    pub fn new(controller: Arc<PlaybackController>) -> Result<Self, OutputError> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -96,17 +94,15 @@ impl CpalBackend {
         let stream = build_f32_stream(&device, &supported, state.clone())?;
         stream.play()?;
 
-        let backend = Arc::new(Self { state, stream });
+        // Intentionally leak the Stream: it owns the realtime audio thread.
+        // Forgetting it keeps playback running for the whole process without
+        // needing an Arc around a !Send type.
+        std::mem::forget(stream);
 
-        // Leak one Arc reference — the Stream (and its realtime thread) must
-        // never be dropped; playback lasts for the whole process lifetime.
-        std::mem::forget(Arc::clone(&backend));
-
-        Ok(backend)
+        Ok(Self { state })
     }
 
-    /// Update EQ chain. Must be called from the thread that created the
-    /// backend (the `Stream` inside is platform-restricted to !Send).
+    /// Update EQ chain — safe from any thread.
     pub fn update_eq(&self, settings: &crate::effects::EqSettings, sample_rate: f64) {
         *self.state.eq_chain.lock() = BiquadEq::from_settings(sample_rate, settings);
     }

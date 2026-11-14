@@ -2,7 +2,7 @@
 //!
 //! Owns the queue, the current decoder, and the EQ. Owns a background
 //! decoder thread that feeds a bounded sample ring buffer; the realtime
-//! audio callback (`audio_output::CpalBackend`) drains the buffer in its
+//! audio callback (`audio_output::AudioOutput`) drains the buffer in its
 //! `data_callback`.
 //!
 //! Cross-platform: this module has no platform deps (no CPAL). The audio
