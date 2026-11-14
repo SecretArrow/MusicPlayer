@@ -6,6 +6,12 @@
 //! Only f32 output streams are built. f32 is supported by every modern
 //! backend (WASAPI, ALSA, CoreAudio, AAudio); devices that cannot do f32
 //! surface a clear `UnsupportedFormat` error instead of a silent failure.
+//!
+//! Thread-safety: cpal's `Stream` is deliberately `!Send`/`!Sync` on some
+//! platforms (`NotSendSyncAcrossAllPlatforms`). Therefore the realtime
+//! callback only captures a `CallbackState` (Send + Sync: controller handle
+//! + EQ mutex), while the `Stream` handle itself stays on the thread that
+//! created it and is never moved across threads.
 
 use crate::effects::BiquadEq;
 use crate::playback::PlaybackController;
@@ -35,11 +41,20 @@ pub enum OutputError {
     Play(#[from] cpal::PlayStreamError),
 }
 
-/// The CPAL backend.
-pub struct CpalBackend {
+/// Everything the realtime callback needs. Auto-`Send + Sync`: the
+/// controller handle is an `Arc` of Send+Sync state and the EQ lives behind
+/// a parking_lot mutex. cpal's callback closure moves it to its audio thread.
+struct CallbackState {
     controller: Arc<PlaybackController>,
-    stream: Mutex<Option<Stream>>,
     eq_chain: Mutex<BiquadEq>,
+}
+
+/// The CPAL backend handle. Contains the `Stream`, which is `!Send` on some
+/// platforms — keep this on the thread that created it.
+pub struct CpalBackend {
+    state: Arc<CallbackState>,
+    #[allow(dead_code)]
+    stream: Stream,
 }
 
 impl CpalBackend {
@@ -57,7 +72,7 @@ impl CpalBackend {
         let supported = device.default_output_config()?;
         let sample_format = supported.sample_format();
         if sample_format != SampleFormat::F32 {
-            // Ask cpal to negotiate an f32-capable config instead of failing hard.
+            // Negotiate an f32-capable config instead of failing hard.
             let configs = match device.supported_output_configs() {
                 Ok(c) => c,
                 Err(e) => return Err(OutputError::NoDevice(e.to_string())),
@@ -73,15 +88,15 @@ impl CpalBackend {
         let eq =
             BiquadEq::from_settings(supported.sample_rate().0 as f64, &controller.eq_settings());
 
-        let backend = Arc::new(Self {
+        let state = Arc::new(CallbackState {
             controller: controller.clone(),
-            stream: Mutex::new(None),
             eq_chain: Mutex::new(eq),
         });
 
-        let stream = build_f32_stream(&device, &supported, backend.clone())?;
+        let stream = build_f32_stream(&device, &supported, state.clone())?;
         stream.play()?;
-        *backend.stream.lock() = Some(stream);
+
+        let backend = Arc::new(Self { state, stream });
 
         // Leak one Arc reference — the Stream (and its realtime thread) must
         // never be dropped; playback lasts for the whole process lifetime.
@@ -90,24 +105,25 @@ impl CpalBackend {
         Ok(backend)
     }
 
-    /// Update EQ chain (called when EQ settings change).
+    /// Update EQ chain. Must be called from the thread that created the
+    /// backend (the `Stream` inside is platform-restricted to !Send).
     pub fn update_eq(&self, settings: &crate::effects::EqSettings, sample_rate: f64) {
-        *self.eq_chain.lock() = BiquadEq::from_settings(sample_rate, settings);
+        *self.state.eq_chain.lock() = BiquadEq::from_settings(sample_rate, settings);
     }
 }
 
 fn build_f32_stream(
     device: &cpal::Device,
     config: &cpal::SupportedStreamConfig,
-    backend: Arc<CpalBackend>,
+    state: Arc<CallbackState>,
 ) -> Result<Stream, OutputError> {
     let err_fn = |err| log::error!("cpal stream error: {err}");
     let stream = device.build_output_stream(
         &config.clone().into(),
         move |out: &mut [f32], _info: &cpal::OutputCallbackInfo| {
-            let written = backend
+            let written = state
                 .controller
-                .drain_samples_with_eq(out, &mut backend.eq_chain.lock());
+                .drain_samples_with_eq(out, &mut state.eq_chain.lock());
             // Underrun: fill the remainder with silence.
             for s in &mut out[written..] {
                 *s = 0.0;
