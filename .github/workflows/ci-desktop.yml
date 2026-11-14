@@ -90,7 +90,7 @@ jobs:
         run: |
           $staging = "musicplayer-desktop-windows-x64"
           New-Item -ItemType Directory -Path $staging -Force | Out-Null
-          Copy-Item "desktop/target/x86_64-pc-windows-msvc/release/musicplayer-desktop.exe" "$staging/"
+          Copy-Item "target/x86_64-pc-windows-msvc/release/musicplayer-desktop.exe" "$staging/"
           Copy-Item -Recurse "desktop/assets/*" "$staging/"
           Copy-Item "README.md" "$staging/"
           Compress-Archive -Path "$staging/*" -DestinationPath "${{ matrix.artifact_name }}.zip"
@@ -100,7 +100,7 @@ jobs:
         run: |
           staging="musicplayer-desktop-linux-x64"
           mkdir -p "$staging"
-          cp "desktop/target/x86_64-unknown-linux-gnu/release/musicplayer-desktop" "$staging/"
+          cp "target/x86_64-unknown-linux-gnu/release/musicplayer-desktop" "$staging/"
           cp -r desktop/assets/* "$staging/" 2>/dev/null || true
           cp README.md "$staging/"
           tar czf ${{ matrix.artifact_name }}.tar.gz -C "$staging" .
@@ -110,7 +110,7 @@ jobs:
         run: |
           staging="musicplayer-desktop-macos-arm64"
           mkdir -p "$staging"
-          cp "desktop/target/aarch64-apple-darwin/release/musicplayer-desktop" "$staging/"
+          cp "target/aarch64-apple-darwin/release/musicplayer-desktop" "$staging/"
           cp -r desktop/assets/* "$staging/" 2>/dev/null || true
           cp README.md "$staging/"
           tar czf ${{ matrix.artifact_name }}.tar.gz -C "$staging" .
