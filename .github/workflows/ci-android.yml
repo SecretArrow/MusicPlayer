@@ -174,7 +174,7 @@ jobs:
 
       - name: Build per-ABI APKs (split)
         working-directory: android
-        run: ./gradlew assembleRelease --split-per-abi
+        run: ./gradlew assembleRelease  # splits.abi config produces per-ABI APKs automatically
         env:
           ANDROID_KEYSTORE_ZIP_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
