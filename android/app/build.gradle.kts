@@ -64,6 +64,15 @@ android {
         buildConfig = true
     }
 
+    lint {
+        // The generated UniFFI bindings (app/src/main/kotlin/uniffi/) call
+        // java.lang.ref.Cleaner behind a Class.forName runtime guard with a
+        // JNA fallback for pre-API-33 devices — lint cannot see the guard and
+        // flags NewApi. Safe to disable: our hand-written code does not use
+        // any version-gated APIs.
+        disable += "NewApi"
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
