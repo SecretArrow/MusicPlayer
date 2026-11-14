@@ -50,7 +50,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-android,x86_64-linux-android,i686-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
 
       - name: Install Java JDK
         uses: actions/setup-java@v4
@@ -123,7 +123,7 @@ jobs:
       - name: Build Rust Android libraries (all ABIs)
         working-directory: android/rust
         run: |
-          for target in aarch64-linux-android armv7-linux-android i686-linux-android x86_64-linux-android; do
+          for target in aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android; do
             cargo build --release --target "$target"
           done
 
@@ -143,7 +143,7 @@ jobs:
       - name: Verify Rust Android libs exist
         run: |
           status=0
-          for target in aarch64-linux-android armv7-linux-android i686-linux-android x86_64-linux-android; do
+          for target in aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android; do
             libs=$(ls target/$target/release/*.so 2>/dev/null || true)
             if [ -z "$libs" ]; then
               echo "::error::No .so produced for $target (expected target/$target/release/*.so)"

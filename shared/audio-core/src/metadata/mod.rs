@@ -20,7 +20,7 @@ pub struct Artwork {
 
 /// Serde adapter that serializes `Arc<Vec<u8>>` as a plain byte array.
 mod serde_bytes_arc {
-    use serde::{Deserialize, Deserializer, Serializer};
+    use serde::{Deserializer, Serializer};
     use std::sync::Arc;
 
     pub fn serialize<S>(v: &Arc<Vec<u8>>, s: S) -> Result<S::Ok, S::Error>
@@ -139,10 +139,10 @@ fn extract(tagged: lofty::file::TaggedFile) -> AudioMetadata {
         out.album = tag.album().map(|s| s.to_string());
         out.album_artist = tag.get_string(&ItemKey::AlbumArtist).map(|s| s.to_string());
         out.genre = tag.genre().map(|s| s.to_string());
-        out.year = tag.year().map(|y| y as u32);
-        out.track_number = tag.track().map(|t| t as u32);
-        out.total_tracks = tag.track_total().map(|t| t as u32);
-        out.disc_number = tag.disk().map(|d| d as u32);
+        out.year = tag.year();
+        out.track_number = tag.track();
+        out.total_tracks = tag.track_total();
+        out.disc_number = tag.disk();
         out.composer = tag.get_string(&ItemKey::Composer).map(|s| s.to_string());
         out.comment = tag.get_string(&ItemKey::Comment).map(|s| s.to_string());
 

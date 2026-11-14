@@ -18,7 +18,7 @@ use thiserror::Error;
 
 use crate::decoder::{open_file, Decoder, DecoderError};
 use crate::effects::{BiquadEq, EqSettings};
-use crate::queue::{RepeatMode, SharedQueue, ShuffleMode, TrackQueue};
+use crate::queue::SharedQueue;
 
 /// Realtime sample ring buffer capacity (frames; stereo = 2x samples).
 pub const RING_BUFFER_FRAMES: usize = 16384;

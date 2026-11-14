@@ -34,6 +34,11 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install ALSA headers (required by cpal for --all-features)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev pkg-config
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:

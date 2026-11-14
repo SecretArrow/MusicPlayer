@@ -116,7 +116,7 @@ pub mod symphonia_decoder {
     use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
     use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
     use symphonia::core::meta::MetadataOptions;
-    use symphonia::core::sample::Sample;
+
     use symphonia::core::units::{Time, TimeBase};
 
     /// Convert a Symphonia `AudioBufferRef` to interleaved f32 samples.
@@ -202,7 +202,7 @@ pub mod symphonia_decoder {
             let format_name = format
                 .metadata()
                 .current()
-                .and_then(|_m| None)
+                .and(None)
                 .unwrap_or_else(|| "unknown".into());
 
             let codec_name = codec_params.codec.to_string();

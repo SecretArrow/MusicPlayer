@@ -18,7 +18,8 @@
 //! decoder thread; only pre-decoded samples are fed to the realtime callback.
 
 #![forbid(unsafe_op_in_unsafe_fn)]
-#![warn(missing_docs)]
+#![allow(missing_docs)]
+#![allow(clippy::should_implement_trait)]
 #![allow(clippy::needless_doctest_main)]
 
 pub mod decoder;

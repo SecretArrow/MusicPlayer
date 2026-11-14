@@ -390,8 +390,10 @@ mod tests {
 
     #[test]
     fn eq_chain_passes_signal_through_when_disabled() {
-        let mut settings = EqSettings::default();
-        settings.enabled = false;
+        let settings = EqSettings {
+            enabled: false,
+            ..Default::default()
+        };
         let mut eq = BiquadEq::from_settings(44100.0, &settings);
         let mut buf = [0.5_f32; 8];
         eq.process_buffer(&mut buf);
@@ -400,8 +402,10 @@ mod tests {
 
     #[test]
     fn eq_chain_modifies_signal_when_enabled() {
-        let mut settings = EqSettings::default();
-        settings.enabled = true;
+        let mut settings = EqSettings {
+            enabled: true,
+            ..Default::default()
+        };
         settings.apply_preset("bass boost");
         let mut eq = BiquadEq::from_settings(44100.0, &settings);
         let mut buf = [0.5_f32; 1024];

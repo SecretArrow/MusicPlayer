@@ -31,8 +31,10 @@ fn rms(buf: &[f32], skip: usize) -> f64 {
 /// Build an enabled EQ chain from a preset; the chain is a pure passthrough
 /// while `enabled == false`, so these tests must opt in explicitly.
 fn eq_with_preset(preset: &str, preamp_db: f32) -> BiquadEq {
-    let mut settings = EqSettings::default();
-    settings.enabled = true;
+    let mut settings = EqSettings {
+        enabled: true,
+        ..Default::default()
+    };
     settings.preamp_db = preamp_db;
     settings.apply_preset(preset);
     BiquadEq::from_settings(SR, &settings)
@@ -121,7 +123,7 @@ fn soft_clip_bounds_output() {
         "soft_clip(1.0) = {y1}, expected ~0.95"
     );
     let yn1 = soft_clip(-1.0);
-    assert!(yn1 < -0.8 && yn1 >= -1.0, "soft_clip(-1.0) = {yn1}");
+    assert!((-1.0..-0.8).contains(&yn1), "soft_clip(-1.0) = {yn1}");
     let y1001 = soft_clip(1.001);
     assert!(
         y1001 > 0.8 && y1001 <= 1.0,

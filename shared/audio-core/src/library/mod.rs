@@ -11,8 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use thiserror::Error;
 
-use crate::decoder::ProbeResult;
-use crate::metadata::{read_from_file, AudioMetadata};
+use crate::metadata::read_from_file;
 
 /// One indexed library entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,7 +154,7 @@ impl Library {
             .iter()
             .filter_map(|(id, c)| self.entries.get(id).map(|e| (e, *c)))
             .collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|a| std::cmp::Reverse(a.1));
         v.truncate(limit);
         v
     }
