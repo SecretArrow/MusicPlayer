@@ -91,7 +91,9 @@ jobs:
           $staging = "musicplayer-desktop-windows-x64"
           New-Item -ItemType Directory -Path $staging -Force | Out-Null
           Copy-Item "target/x86_64-pc-windows-msvc/release/musicplayer-desktop.exe" "$staging/"
-          Copy-Item -Recurse "desktop/assets/*" "$staging/"
+          if (Test-Path "desktop/assets") {
+            Copy-Item -Recurse "desktop/assets/*" "$staging/" -ErrorAction SilentlyContinue
+          }
           Copy-Item "README.md" "$staging/"
           Compress-Archive -Path "$staging/*" -DestinationPath "${{ matrix.artifact_name }}.zip"
 

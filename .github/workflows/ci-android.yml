@@ -65,7 +65,7 @@ jobs:
         run: |
           SDKM="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKM" --licenses > /dev/null 2>&1 || true
-          "$SDKM" --install "platform-tools" "platforms;android-34" \
+          "$SDKM" --install "platform-tools" "platforms;android-35" \
             "build-tools;34.0.0" "ndk;27.0.12077973"
 
       - name: Setup Gradle
