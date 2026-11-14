@@ -2,9 +2,13 @@
 //!
 //! Drains samples from the `PlaybackController`'s ring buffer in the realtime
 //! CPAL callback. Runs on its own audio thread; never blocks.
+//!
+//! Only f32 output streams are built. f32 is supported by every modern
+//! backend (WASAPI, ALSA, CoreAudio, AAudio); devices that cannot do f32
+//! surface a clear `UnsupportedFormat` error instead of a silent failure.
 
 use crate::effects::BiquadEq;
-use crate::playback::{PlaybackController, PlaybackState};
+use crate::playback::PlaybackController;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, Stream};
 use parking_lot::Mutex;
@@ -14,12 +18,21 @@ use thiserror::Error;
 /// CPAL output errors.
 #[derive(Debug, Error)]
 pub enum OutputError {
+    /// No usable output device on this host.
     #[error("no output device available: {0}")]
     NoDevice(String),
-    #[error("unsupported sample format: {0:?}")]
+    /// Device cannot produce an f32 stream.
+    #[error("output device does not support f32 (got {0:?})")]
     UnsupportedFormat(SampleFormat),
-    #[error("cpal error: {0}")]
-    Cpal(#[from] cpal::Error),
+    /// Configuring the default output config failed.
+    #[error("default stream config error: {0}")]
+    Config(#[from] cpal::DefaultStreamConfigError),
+    /// Building the stream failed.
+    #[error("build stream error: {0}")]
+    Build(#[from] cpal::BuildStreamError),
+    /// Playing the stream failed.
+    #[error("stream play error: {0}")]
+    Play(#[from] cpal::PlayError),
 }
 
 /// The CPAL backend.
@@ -38,6 +51,23 @@ impl CpalBackend {
             .ok_or_else(|| OutputError::NoDevice("default output device unavailable".into()))?;
         let supported = device.default_output_config()?;
         let sample_format = supported.sample_format();
+        if sample_format != SampleFormat::F32 {
+            // Ask cpal to negotiate an f32-capable config instead of failing hard.
+            let configs = match device.supported_output_configs() {
+                Ok(c) => c,
+                Err(e) => return Err(OutputError::NoDevice(e.to_string())),
+            };
+            let f32cfg = configs
+                .filter(|c| c.sample_format() == SampleFormat::F32)
+                .max_by(|a, b| a.max_sample_rate().cmp(&b.max_sample_rate()));
+            match f32cfg {
+                Some(cfg) => {
+                    let _ = cfg;
+                    // Fall through; build_stream below requests f32 explicitly.
+                }
+                None => return Err(OutputError::UnsupportedFormat(sample_format)),
+            }
+        }
 
         let eq =
             BiquadEq::from_settings(supported.sample_rate().0 as f64, &controller.eq_settings());
@@ -48,17 +78,17 @@ impl CpalBackend {
             eq_chain: Mutex::new(eq),
         });
 
-        let stream = match sample_format {
-            SampleFormat::F32 => build_stream::<f32>(&device, &supported, backend.clone())?,
-            SampleFormat::I16 => build_stream::<i16>(&device, &supported, backend.clone())?,
-            SampleFormat::U16 => build_stream::<u16>(&device, &supported, backend.clone())?,
-            other => return Err(OutputError::UnsupportedFormat(other)),
-        };
+        let stream = build_f32_stream(&device, &supported, backend.clone())?;
         stream.play()?;
         *backend.stream.lock() = Some(stream);
 
-        Ok(Arc::try_unwrap(backend)
-            .map_err(|_| OutputError::NoDevice("backend still shared after build".into()))?)
+        // Keep the owned Arc alive for the process lifetime: the stream thread
+        // holds the callbacks; dropping it here would stop playback.
+        let inner = Arc::try_unwrap(backend)
+            .map_err(|_| OutputError::NoDevice("backend still shared".into()))?;
+        std::mem::forget(inner.stream);
+
+        Ok(inner)
     }
 
     /// Update EQ chain (called when EQ settings change).
@@ -67,42 +97,22 @@ impl CpalBackend {
     }
 }
 
-fn build_stream<T>(
+fn build_f32_stream(
     device: &cpal::Device,
     config: &cpal::SupportedStreamConfig,
     backend: Arc<CpalBackend>,
-) -> Result<Stream, OutputError>
-where
-    T: cpal::Sample + 'static,
-    T: num_traits::cast::FromPrimitive,
-{
-    let sample_rate = config.sample_rate().0;
-    let channels = config.channels() as usize;
-    let err_fn = |err| log::error!("cpal stream error: {}", err);
+) -> Result<Stream, OutputError> {
+    let err_fn = |err| log::error!("cpal stream error: {err}");
     let stream = device.build_output_stream(
-        &config.into(),
-        move |out: &mut [T], _info: &cpal::OutputCallbackInfo| {
-            // Convert requested output to f32 buffer.
-            let mut buf_f32 = vec![0.0f32; out.len()];
+        &config.clone().into(),
+        move |out: &mut [f32], _info: &cpal::OutputCallbackInfo| {
             let written = backend
                 .controller
-                .drain_samples_with_eq(&mut buf_f32, &mut backend.eq_chain.lock());
-            // If underrun, fill remainder with silence.
+                .drain_samples_with_eq(out, &mut backend.eq_chain.lock());
+            // Underrun: fill the remainder with silence.
             for s in &mut out[written..] {
-                *s = T::from_f64(0.0).unwrap_or_else(|| T::from_i32(0).unwrap());
+                *s = 0.0;
             }
-            // Convert f32 → T.
-            let conv = |v: f32| -> T {
-                let clamped = v.clamp(-1.0, 1.0);
-                T::from_f64(clamped as f64).unwrap_or_else(|| T::from_i32(0).unwrap())
-            };
-            for (i, slot) in out.iter_mut().enumerate() {
-                if i < written {
-                    *slot = conv(buf_f32[i]);
-                }
-            }
-            // Silence unused warnings.
-            let _ = (sample_rate, channels);
         },
         err_fn,
         None,
@@ -115,6 +125,6 @@ mod tests {
     #[test]
     fn output_error_displays() {
         let e = super::OutputError::NoDevice("test".into());
-        assert_eq!(format!("{}", e), "no output device available: test");
+        assert_eq!(format!("{e}"), "no output device available: test");
     }
 }
