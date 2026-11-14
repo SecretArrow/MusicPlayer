@@ -13,7 +13,11 @@ use crate::theme::{Layout, Theme};
 /// Render the entire UI into the Vello `Scene`.
 pub fn render(scene: &mut Scene, theme: &Theme, state: &AppState, size: (f64, f64)) {
     // Clear background.
-    let bg = Color::rgb(theme.background[0], theme.background[1], theme.background[2]);
+    let bg = Color::rgb(
+        theme.background[0],
+        theme.background[1],
+        theme.background[2],
+    );
     scene.fill(
         Fill::NonZero,
         Affine::IDENTITY,
@@ -47,7 +51,11 @@ fn text(theme: &Theme) -> Color {
 }
 
 fn text_muted(theme: &Theme) -> Color {
-    Color::rgb(theme.text_muted[0], theme.text_muted[1], theme.text_muted[2])
+    Color::rgb(
+        theme.text_muted[0],
+        theme.text_muted[1],
+        theme.text_muted[2],
+    )
 }
 
 /// Classic layout: sidebar left + bottom player bar.
@@ -69,7 +77,14 @@ fn render_classic(scene: &mut Scene, theme: &Theme, _state: &AppState, size: (f6
     );
 
     // Sidebar items
-    let nav_items = ["Home", "Search", "Library", "Playlists", "Lyrics", "Settings"];
+    let nav_items = [
+        "Home",
+        "Search",
+        "Library",
+        "Playlists",
+        "Lyrics",
+        "Settings",
+    ];
     for (i, item) in nav_items.iter().enumerate() {
         let y = 64.0 + (i as f64) * 44.0;
         // Accent dot for "active" (Home)
@@ -128,14 +143,23 @@ fn render_classic(scene: &mut Scene, theme: &Theme, _state: &AppState, size: (f6
         &Brush::Solid(text_m),
         None,
         &RoundedRect::from_rect(
-            Rect::new(sidebar_w + 24.0, progress_y, sidebar_w + 24.0 + progress_w, progress_y + 4.0),
+            Rect::new(
+                sidebar_w + 24.0,
+                progress_y,
+                sidebar_w + 24.0 + progress_w,
+                progress_y + 4.0,
+            ),
             2.0,
         ),
     );
     // Progress fill (0% for now)
     let position = _state.controller.position();
     let duration = _state.controller.duration();
-    let pct = if duration > 0.0 { (position / duration).clamp(0.0, 1.0) } else { 0.0 };
+    let pct = if duration > 0.0 {
+        (position / duration).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
     scene.fill(
         Fill::NonZero,
         Affine::IDENTITY,
@@ -185,7 +209,10 @@ fn render_glass(scene: &mut Scene, theme: &Theme, _state: &AppState, size: (f64,
         Affine::IDENTITY,
         &Brush::Solid(surf),
         None,
-        &RoundedRect::from_rect(Rect::new(panel_x, panel_y, panel_x + 640.0, panel_y + 400.0), 24.0),
+        &RoundedRect::from_rect(
+            Rect::new(panel_x, panel_y, panel_x + 640.0, panel_y + 400.0),
+            24.0,
+        ),
     );
     // Track title placeholder
     let _ = text_c;
@@ -241,7 +268,10 @@ fn render_cassette(scene: &mut Scene, theme: &Theme, _state: &AppState, size: (f
         Affine::IDENTITY,
         &Brush::Solid(surf),
         None,
-        &RoundedRect::from_rect(Rect::new(80.0, body_y, size.0 - 80.0, body_y + body_h), 12.0),
+        &RoundedRect::from_rect(
+            Rect::new(80.0, body_y, size.0 - 80.0, body_y + body_h),
+            12.0,
+        ),
     );
     // Two reels
     for &offset in &[140.0, 0.0] {

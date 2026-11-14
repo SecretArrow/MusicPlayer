@@ -1,0 +1,17 @@
+# UniFFI configuration for the `musicplayer-android-rust` crate.
+#
+# Read by `uniffi-bindgen` when generating Kotlin bindings (library mode).
+# Values below are the defaults for this project — kept explicit so the
+# generated Kotlin package and runtime library name are stable.
+
+[bindings.kotlin]
+# Kotlin package for the generated bindings. Mirrors the UDL namespace
+# that was used before the crate switched to proc-macros.
+package_name = "uniffi.musicplayer"
+
+# The cdylib Kotlin must load at runtime (`System.loadLibrary(...)`).
+# Must match the [lib].name in Cargo.toml — do NOT change one without the other.
+cdylib_name = "musicplayer_android"
+
+# Generate idiomatic immutable Kotlin records (`val` instead of `var`).
+generate_immutable_records = true

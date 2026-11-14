@@ -11,14 +11,19 @@ name = "musicplayer_android"
 crate-type = ["lib", "staticlib", "cdylib"]
 path = "src/lib.rs"
 
+# uniFFI bindings generator binary (per UniFFI 0.28 docs: each project ships
+# its own `uniffi-bindgen` because cargo nightly artifact dependencies are not
+# widely available). Run via `cargo run --bin uniffi-bindgen -- generate ...`.
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
 [dependencies]
 audio-core = { path = "../../shared/audio-core", features = ["decoder", "metadata", "effects"] }
 uniffi = { version = "0.28", features = ["cli"] }
 parking_lot = "0.12"
 log = "0.4"
-
-[build-dependencies]
-uniffi = { version = "0.28", features = ["build"] }
+env_logger = "0.11"
 
 [profile.release]
 opt-level = 3

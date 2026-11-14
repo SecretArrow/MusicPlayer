@@ -39,6 +39,7 @@ log = "0.4"
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+tempfile = "3"
 
 # Profiling / release tuning for realtime audio paths.
 [profile.release]

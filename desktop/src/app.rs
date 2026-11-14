@@ -1,8 +1,8 @@
 //! App state — shared between the render thread and event handlers.
 
-use std::sync::Arc;
-use parking_lot::RwLock;
 use audio_core::PlaybackController;
+use parking_lot::RwLock;
+use std::sync::Arc;
 
 use crate::theme::Theme;
 

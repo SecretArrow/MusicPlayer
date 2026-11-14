@@ -15,15 +15,17 @@ use std::sync::Arc;
 
 fn main() {
     env_logger::init();
-    log::info!("MusicPlayer desktop v{} starting", env!("CARGO_PKG_VERSION"));
+    log::info!(
+        "MusicPlayer desktop v{} starting",
+        env!("CARGO_PKG_VERSION")
+    );
 
     // Build the audio engine + playback controller.
     let queue = audio_core::queue::shared_queue(Vec::new());
     let controller = audio_core::PlaybackController::new(queue);
 
     // Create the Winit event loop + window.
-    let event_loop = winit::event_loop::EventLoop::new()
-        .expect("failed to create event loop");
+    let event_loop = winit::event_loop::EventLoop::new().expect("failed to create event loop");
     let window = winit::window::WindowBuilder::new()
         .with_title("MusicPlayer")
         .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 800.0))

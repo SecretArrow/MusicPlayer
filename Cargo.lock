@@ -246,6 +246,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "symphonia",
+ "tempfile",
  "thiserror 1.0.69",
  "uniffi",
 ]
@@ -849,6 +850,12 @@ name = "extended"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af9673d8203fcb076b19dfd17e38b3d4ae9f44959416ea532ce72415a6020365"
+
+[[package]]
+name = "fastrand"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "fdeflate"
@@ -1556,6 +1563,7 @@ name = "musicplayer-android-rust"
 version = "0.1.0"
 dependencies = [
  "audio-core",
+ "env_logger",
  "log",
  "parking_lot",
  "uniffi",
@@ -2742,6 +2750,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tempfile"
+version = "3.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+dependencies = [
+ "fastrand",
+ "getrandom 0.4.3",
+ "once_cell",
+ "rustix 1.1.6",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "termcolor"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2942,7 +2963,6 @@ dependencies = [
  "cargo_metadata",
  "clap",
  "uniffi_bindgen",
- "uniffi_build",
  "uniffi_core",
  "uniffi_macros",
 ]
@@ -2968,17 +2988,6 @@ dependencies = [
  "toml",
  "uniffi_meta",
  "uniffi_udl",
-]
-
-[[package]]
-name = "uniffi_build"
-version = "0.28.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c7cf32576e08104b7dc2a6a5d815f37616e66c6866c2a639fe16e6d2286b75b"
-dependencies = [
- "anyhow",
- "camino",
- "uniffi_bindgen",
 ]
 
 [[package]]

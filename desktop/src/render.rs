@@ -48,9 +48,7 @@ pub async fn run(event_loop: EventLoop, window: Window, state: Arc<AppState>) {
     let mut app = VelloApp::new(state);
     app.window = Some(window.clone());
 
-    event_loop
-        .run_app(&mut app)
-        .expect("event loop failed");
+    event_loop.run_app(&mut app).expect("event loop failed");
 }
 
 impl ApplicationHandler for VelloApp {
@@ -67,10 +65,9 @@ impl ApplicationHandler for VelloApp {
         // (Re)create the Vello surface for the window.
         if let Some(window) = &self.window {
             let render_ctx = RenderContext::new();
-            let surface = pollster::block_on(render_ctx.create_surface(
-                window.clone(),
-                window.surface_defaults(),
-            ));
+            let surface = pollster::block_on(
+                render_ctx.create_surface(window.clone(), window.surface_defaults()),
+            );
             let state = vello::RendererState::new();
             let renderer = vello::Renderer::new(&state);
             self.render_state = Some(RenderState {
@@ -110,10 +107,11 @@ impl ApplicationHandler for VelloApp {
                 *self.state.scale.write() = scale_factor as f32;
             }
             WindowEvent::KeyboardInput {
-                event: KeyEvent {
-                    state: ElementState::Pressed,
-                    ..
-                },
+                event:
+                    KeyEvent {
+                        state: ElementState::Pressed,
+                        ..
+                    },
                 ..
             } => {
                 // TODO: bind space → play/pause, ←/→ → prev/next, etc.
@@ -135,8 +133,12 @@ impl ApplicationHandler for VelloApp {
 
 impl VelloApp {
     fn render(&mut self) {
-        let Some(rs) = self.render_state.as_mut() else { return };
-        let Some(window) = self.window.as_ref() else { return };
+        let Some(rs) = self.render_state.as_mut() else {
+            return;
+        };
+        let Some(window) = self.window.as_ref() else {
+            return;
+        };
 
         let (w, h) = window.inner_size().into();
         let width = w;
@@ -145,7 +147,12 @@ impl VelloApp {
         // Build the scene based on the active theme + layout.
         let theme = self.state.theme.read().clone();
         let mut scene = Scene::new();
-        crate::ui::render(&mut scene, &theme, &self.state, (width as f64, height as f64));
+        crate::ui::render(
+            &mut scene,
+            &theme,
+            &self.state,
+            (width as f64, height as f64),
+        );
 
         // Render the scene to the surface.
         rs.render_ctx
@@ -155,7 +162,11 @@ impl VelloApp {
                 &scene,
                 &rs.surface,
                 vello::RenderParams {
-                    base_color: Color::rgb(theme.background[0], theme.background[1], theme.background[2]),
+                    base_color: Color::rgb(
+                        theme.background[0],
+                        theme.background[1],
+                        theme.background[2],
+                    ),
                     width,
                     height,
                     antialiasing: AaConfig::Area,
