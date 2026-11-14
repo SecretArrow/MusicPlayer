@@ -22,20 +22,20 @@
 #![allow(clippy::needless_doctest_main)]
 
 pub mod decoder;
-pub mod playback;
-pub mod queue;
-pub mod playlist;
-pub mod metadata;
 pub mod effects;
 pub mod library;
+pub mod metadata;
+pub mod playback;
+pub mod playlist;
+pub mod queue;
 
 #[cfg(feature = "audio_output")]
 pub mod audio_output;
 
 pub use decoder::{DecodedFrame, Decoder, DecoderError, ProbeResult};
-pub use effects::{EqBand, EqSettings, BiquadEq, Biquad, EQ_FREQS, preset_gains, preset_names};
+pub use effects::{preset_gains, preset_names, Biquad, BiquadEq, EqBand, EqSettings, EQ_FREQS};
 pub use library::{Library, LibraryEntry, ScanProgress};
-pub use metadata::{AudioMetadata, Artwork};
+pub use metadata::{Artwork, AudioMetadata};
 pub use playback::{PlaybackController, PlaybackEvent, PlaybackState};
 pub use playlist::{Playlist, PlaylistId, PlaylistStore};
 pub use queue::{RepeatMode, ShuffleMode, TrackQueue};

@@ -3,16 +3,16 @@
 //! Walks a directory tree, probes each audio file, caches metadata &
 //! artwork. Designed to run incrementally on a background thread.
 
+use crossbeam_channel::{bounded, Receiver, Sender};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::collections::HashMap;
 use thiserror::Error;
-use crossbeam_channel::{bounded, Receiver, Sender};
 
-use crate::metadata::{read_from_file, AudioMetadata};
 use crate::decoder::ProbeResult;
+use crate::metadata::{read_from_file, AudioMetadata};
 
 /// One indexed library entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,7 +40,11 @@ pub enum ScanProgress {
     /// Scan started; `total_files` is None when unknown.
     Started { total_files: Option<usize> },
     /// One file indexed.
-    FileIndexed { path: PathBuf, current: usize, total: Option<usize> },
+    FileIndexed {
+        path: PathBuf,
+        current: usize,
+        total: Option<usize>,
+    },
     /// File was unreadable.
     FileFailed { path: PathBuf, error: String },
     /// Scan finished.
@@ -214,7 +218,9 @@ pub fn scan_dir_into<P: AsRef<Path>>(
     let mut files: Vec<PathBuf> = Vec::new();
     collect_audio_files(root, &mut files)?;
     let total = files.len();
-    let _ = progress.send(ScanProgress::Started { total_files: Some(total) });
+    let _ = progress.send(ScanProgress::Started {
+        total_files: Some(total),
+    });
 
     let mut indexed = 0usize;
     let mut failed = 0usize;
@@ -363,14 +369,25 @@ mod tests {
     #[test]
     fn search_matches_substring_case_insensitively() {
         let mut lib = Library::new();
-        for (id, title, artist) in [("t1", "Midnight", "Aurora"), ("t2", "Sunrise", "Aurora Bay")] {
+        for (id, title, artist) in [
+            ("t1", "Midnight", "Aurora"),
+            ("t2", "Sunrise", "Aurora Bay"),
+        ] {
             lib.upsert(LibraryEntry {
-                id: id.into(), path: format!("/{}.mp3", id).into(),
-                title: title.into(), artist: artist.into(),
-                album: "X".into(), genre: "Rock".into(),
-                year: 2024, track_number: 1, duration_secs: 100.0,
-                sample_rate: 44100, channels: 2, bitrate_kbps: 320,
-                has_artwork: false, added_at_secs: 1,
+                id: id.into(),
+                path: format!("/{}.mp3", id).into(),
+                title: title.into(),
+                artist: artist.into(),
+                album: "X".into(),
+                genre: "Rock".into(),
+                year: 2024,
+                track_number: 1,
+                duration_secs: 100.0,
+                sample_rate: 44100,
+                channels: 2,
+                bitrate_kbps: 320,
+                has_artwork: false,
+                added_at_secs: 1,
             });
         }
         assert_eq!(lib.search("mid").len(), 1);

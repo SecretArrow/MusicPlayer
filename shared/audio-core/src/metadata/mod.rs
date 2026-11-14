@@ -121,7 +121,11 @@ fn extract(tagged: lofty::file::TaggedFile) -> AudioMetadata {
     let bitrate_kbps = properties.audio_bitrate();
 
     let mut out = AudioMetadata {
-        duration_secs: if duration_secs > 0.0 { Some(duration_secs) } else { None },
+        duration_secs: if duration_secs > 0.0 {
+            Some(duration_secs)
+        } else {
+            None
+        },
         sample_rate,
         channels,
         bitrate_kbps,
@@ -146,7 +150,10 @@ fn extract(tagged: lofty::file::TaggedFile) -> AudioMetadata {
         if let Some(pic) = tag.pictures().first() {
             out.artwork = Some(Artwork {
                 data: Arc::new(pic.data().to_vec()),
-                mime: pic.mime_type().map(|m| m.to_string()).unwrap_or_else(|| "application/octet-stream".into()),
+                mime: pic
+                    .mime_type()
+                    .map(|m| m.to_string())
+                    .unwrap_or_else(|| "application/octet-stream".into()),
             });
         }
     }

@@ -4,8 +4,8 @@
 
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 /// Stable playlist ID.
 pub type PlaylistId = String;

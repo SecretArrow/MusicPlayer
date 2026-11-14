@@ -76,7 +76,9 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<Box<dyn Decoder>, DecoderErr
     #[cfg(feature = "decoder")]
     {
         let file = File::open(path)?;
-        Ok(Box::new(crate::decoder::symphonia_decoder::SymDecoder::from_file(file)?))
+        Ok(Box::new(
+            crate::decoder::symphonia_decoder::SymDecoder::from_file(file)?,
+        ))
     }
     #[cfg(not(feature = "decoder"))]
     {
@@ -91,7 +93,9 @@ pub fn open_file<P: AsRef<Path>>(path: P) -> Result<Box<dyn Decoder>, DecoderErr
 pub fn open_bytes(bytes: Arc<Vec<u8>>) -> Result<Box<dyn Decoder>, DecoderError> {
     #[cfg(feature = "decoder")]
     {
-        Ok(Box::new(crate::decoder::symphonia_decoder::SymDecoder::from_bytes(bytes)?))
+        Ok(Box::new(
+            crate::decoder::symphonia_decoder::SymDecoder::from_bytes(bytes)?,
+        ))
     }
     #[cfg(not(feature = "decoder"))]
     {
@@ -210,11 +214,7 @@ pub mod symphonia_decoder {
                         (n as f64) * (tb.numer as f64) / (tb.denom as f64)
                     })
                 })
-                .or_else(|| {
-                    codec_params
-                        .n_frames
-                        .map(|n| n as f64 / sample_rate as f64)
-                });
+                .or_else(|| codec_params.n_frames.map(|n| n as f64 / sample_rate as f64));
 
             Ok(Self {
                 format_reader: format,
@@ -278,7 +278,11 @@ pub mod symphonia_decoder {
                     .unwrap_or_else(|| frames as f64 / sample_rate as f64);
                 self.current_position_secs = pts_secs;
 
-                return Ok(Some(DecodedFrame { samples, sample_rate, channels }));
+                return Ok(Some(DecodedFrame {
+                    samples,
+                    sample_rate,
+                    channels,
+                }));
             }
         }
 

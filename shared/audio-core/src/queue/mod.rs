@@ -2,10 +2,10 @@
 //!
 //! Pure-Rust, no platform deps, fully unit-testable.
 
-use std::collections::HashSet;
-use std::sync::Arc;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::sync::Arc;
 
 /// Repeat modes — mirrors the web app's `RepeatMode`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -187,7 +187,11 @@ impl TrackQueue {
 
     /// Reorder: move `from` → `to`.
     pub fn move_item(&mut self, from: usize, to: usize) -> bool {
-        if from == self.current || to == self.current || from >= self.items.len() || to >= self.items.len() {
+        if from == self.current
+            || to == self.current
+            || from >= self.items.len()
+            || to >= self.items.len()
+        {
             return false;
         }
         let item = self.items.remove(from);

@@ -39,10 +39,8 @@ impl CpalBackend {
         let supported = device.default_output_config()?;
         let sample_format = supported.sample_format();
 
-        let eq = BiquadEq::from_settings(
-            supported.sample_rate().0 as f64,
-            &controller.eq_settings(),
-        );
+        let eq =
+            BiquadEq::from_settings(supported.sample_rate().0 as f64, &controller.eq_settings());
 
         let backend = Arc::new(Self {
             controller: controller.clone(),
@@ -86,10 +84,9 @@ where
         move |out: &mut [T], _info: &cpal::OutputCallbackInfo| {
             // Convert requested output to f32 buffer.
             let mut buf_f32 = vec![0.0f32; out.len()];
-            let written = backend.controller.drain_samples_with_eq(
-                &mut buf_f32,
-                &mut backend.eq_chain.lock(),
-            );
+            let written = backend
+                .controller
+                .drain_samples_with_eq(&mut buf_f32, &mut backend.eq_chain.lock());
             // If underrun, fill remainder with silence.
             for s in &mut out[written..] {
                 *s = T::from_f64(0.0).unwrap_or_else(|| T::from_i32(0).unwrap());

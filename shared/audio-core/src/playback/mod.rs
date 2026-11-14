@@ -8,17 +8,17 @@
 //! Cross-platform: this module has no platform deps (no CPAL). The audio
 //! output backend is a separate feature-gated module.
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use parking_lot::Mutex;
 use crossbeam_channel::{bounded, Receiver, Sender};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use thiserror::Error;
 
 use crate::decoder::{open_file, Decoder, DecoderError};
 use crate::effects::{BiquadEq, EqSettings};
-use crate::queue::{RepeatMode, ShuffleMode, TrackQueue, SharedQueue};
+use crate::queue::{RepeatMode, SharedQueue, ShuffleMode, TrackQueue};
 
 /// Realtime sample ring buffer capacity (frames; stereo = 2x samples).
 pub const RING_BUFFER_FRAMES: usize = 16384;
@@ -48,11 +48,18 @@ pub enum PlaybackState {
 pub enum PlaybackEvent {
     StateChanged(PlaybackState),
     /// Current track changed.
-    TrackChanged { id: String, duration_secs: f64 },
+    TrackChanged {
+        id: String,
+        duration_secs: f64,
+    },
     /// Position update (throttled).
-    Position { secs: f64 },
+    Position {
+        secs: f64,
+    },
     /// Track finished; controller auto-advanced to next.
-    TrackEnded { id: String },
+    TrackEnded {
+        id: String,
+    },
     /// Error during playback.
     Error(String),
 }
