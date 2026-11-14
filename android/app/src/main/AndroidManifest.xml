@@ -53,6 +53,12 @@
                 <action android:name="androidx.media3.session.MediaLibraryService" />
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
+            <!-- Android Auto voice search ("play X in MusicPlayer") — required
+                 by the MissingIntentFilterForMediaSearch lint check. -->
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </service>
 
         <!-- Android Auto XML metadata -->
