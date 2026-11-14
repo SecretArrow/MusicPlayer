@@ -130,10 +130,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 _queue.value = state.copy(currentIndex = index)
             }
             _position.value = 0f
-            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
-                reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEKED ||
-                reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
-            ) {
+            // Record a play for every transition except playlist reshuffles.
+            // (MEDIA_ITEM_TRANSITION_REASON_SEEKED does not exist in media3 1.5.1.)
+            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
                 recordPlay(id)
             }
         }
@@ -193,7 +192,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         _duration.value = currentTrack.value?.durationSecs?.toFloat() ?: dur
                     } else if (canAdvance()) {
                         _queue.value = advanceIndex(+1)
-                        currentTrack.value?.let(::recordPlay)
+                        currentTrack.value?.let { recordPlay(it.id) }
                     } else {
                         _isPlaying.value = false
                     }

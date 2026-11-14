@@ -396,7 +396,7 @@ private fun ThemeCard(theme: PlayerTheme, selected: Boolean, onSelect: () -> Uni
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(theme.accent),
-            )
+            ) { }
             if (selected) {
                 Icon(
                     imageVector = Icons.Filled.Check,
@@ -416,7 +416,7 @@ private fun ThemeCard(theme: PlayerTheme, selected: Boolean, onSelect: () -> Uni
                     .size(10.dp)
                     .clip(CircleShape)
                     .background(theme.accent),
-            )
+            ) { }
             Spacer(Modifier.width(6.dp))
             Text(
                 text = theme.label,

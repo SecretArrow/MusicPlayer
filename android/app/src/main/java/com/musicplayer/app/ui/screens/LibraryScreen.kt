@@ -289,7 +289,7 @@ private fun GroupRow(
                 .clip(if (isCircle) CircleShape else RoundedCornerShape(10.dp))
                 .background(Brush.linearGradient(colors)),
             contentAlignment = Alignment.Center,
-        )
+        ) { }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
