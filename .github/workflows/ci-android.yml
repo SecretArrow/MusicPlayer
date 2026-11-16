@@ -287,7 +287,10 @@ jobs:
           found=0
           for apk in app/build/outputs/apk/release/app-*-release.apk; do
             found=1
-            abi=$(basename "$apk" | sed -E 's/^app-([a-z0-9_]+)-release\.apk$/\1/')
+            # ABI names include hyphens (arm64-v8a, armeabi-v7a) so the
+            # character class must allow them, or sed won't match and the
+            # whole filename leaks into the output name.
+            abi=$(basename "$apk" | sed -E 's/^app-([a-z0-9_-]+)-release\.apk$/\1/')
             out="$(dirname "$apk")/musicplayer-${abi}-signed.apk"
             "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
               --ks "$KS_FILE" \
