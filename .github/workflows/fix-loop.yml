@@ -122,6 +122,10 @@ jobs:
             (cd shared/audio-core && cargo test --no-default-features --features decoder,metadata,effects --no-fail-fast)
             echo "### cargo build desktop release"
             (cd desktop && cargo build --release)
+            # The step must always succeed: exit codes from the captured
+            # commands belong to the LOG, not to this step. Failures here
+            # would abort the fix loop before auto_fix.py can run.
+            true
           } >> .logs/failed.log 2>&1
 
       - name: Run auto-fix
