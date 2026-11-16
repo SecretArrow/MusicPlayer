@@ -50,7 +50,10 @@ fn run_smoke_test() -> i32 {
     // Subsystem 1: shared audio-core queue + playback controller.
     let queue = audio_core::queue::shared_queue(Vec::new());
     let controller = audio_core::PlaybackController::new(queue.clone());
-    let _ = writeln!(out, "  [ok] audio-core queue + PlaybackController initialized");
+    let _ = writeln!(
+        out,
+        "  [ok] audio-core queue + PlaybackController initialized"
+    );
 
     // Subsystem 2: library (metadata scan path object).
     let _library = Arc::new(parking_lot::RwLock::new(audio_core::Library::new()));
@@ -67,7 +70,10 @@ fn run_smoke_test() -> i32 {
         "  [ok] PlaybackController initial position: {pos}s (expected 0.0)"
     );
     if pos != 0.0 {
-        let _ = writeln!(std::io::stderr(), "FAIL: position should be 0.0 at startup, got {pos}");
+        let _ = writeln!(
+            std::io::stderr(),
+            "FAIL: position should be 0.0 at startup, got {pos}"
+        );
         return 1;
     }
 
@@ -88,10 +94,7 @@ fn main() {
     if let Some(action) = parse_cli_flags() {
         let code = match action {
             SmokeAction::Version => {
-                println!(
-                    "musicplayer-desktop {}",
-                    env!("CARGO_PKG_VERSION")
-                );
+                println!("musicplayer-desktop {}", env!("CARGO_PKG_VERSION"));
                 0
             }
             SmokeAction::SmokeTest => run_smoke_test(),
