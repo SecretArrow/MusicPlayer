@@ -14,9 +14,18 @@ on:
       - 'desktop/**'
       - 'shared/audio-core/**'
       - '.github/workflows/ci-desktop.yml'
+  schedule:
+    # Auto-release rolling "edge" binaries every 30 minutes (the user's
+    # standing request: "auto release semua binary setiap akhir task /
+    # penjadwalan ... dengan penjadwalan setiap 30 menit"). Cron here is
+    # the canonical way to make GitHub Actions self-trigger on a cadence
+    # without any external scheduler or token.
+    - cron: '0,30 * * * *'
   workflow_dispatch:
 
 # Cancel stale in-flight builds for the same ref (branch/tag) on new pushes.
+# Scheduled runs share ref `refs/heads/main`, so a fresh push or a new
+# schedule tick supersedes the previous run.
 concurrency:
   group: ci-desktop-${{ github.ref }}
   cancel-in-progress: true
@@ -149,7 +158,11 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Publish on every tag push (versioned releases, e.g. v0.1.0) AND on every
+    # scheduled 30-minute tick (rolling `edge` release on main). The two paths
+    # never overlap: a scheduled run uses `refs/heads/main` and writes to the
+    # `edge` tag, while a tag push uses `refs/tags/v*` and writes to that tag.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -182,21 +195,43 @@ jobs:
           done
           exit $status
 
+      # Resolve release target: a tag push publishes under its own name (e.g.
+      # v0.1.0); a scheduled/manual run publishes the rolling `edge` release.
+      # `softprops/action-gh-release` updates an existing release with the same
+      # tag in place, so the `edge` release is overwritten every 30 minutes.
+      - name: Resolve release tag
+        id: rel
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=$( [[ "${GITHUB_REF_NAME}" == *-* ]] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "kind=versioned" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=edge" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "kind=edge" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          name: ${{ steps.rel.outputs.kind == 'edge' && format('MusicPlayer Desktop — edge ({0})', github.sha) || format('MusicPlayer Desktop {0}', steps.rel.outputs.tag) }}
           files: |
             artifacts/musicplayer-desktop-x86_64-windows/*.zip
             artifacts/musicplayer-desktop-x86_64-linux/*.tar.gz
             artifacts/musicplayer-desktop-aarch64-macos/*.tar.gz
           draft: false
-          prerelease: ${{ contains(github.ref, '-') }}
-          generate_release_notes: true
+          prerelease: ${{ steps.rel.outputs.prerelease }}
+          generate_release_notes: false
           body: |
-            # MusicPlayer Desktop ${{ github.ref_name }}
+            # MusicPlayer Desktop ${{ steps.rel.outputs.tag }}
 
             Native desktop music player for Windows, Linux, and macOS.
             Built from commit ${{ github.sha }}.
+
+            ${{ steps.rel.outputs.kind == 'edge' && format('This is a **rolling edge** build, refreshed every 30 minutes by the `schedule` trigger in `ci-desktop.yml`. The latest binaries always live here. Source: [`{0}`](https://github.com/SecretArrow/MusicPlayer/commit/{0})', github.sha) || 'Tagged release. See `docs/ARCHITECTURE.md` for technical details.' }}
 
             ## Downloads
             - **Windows x64**: `musicplayer-desktop-x86_64-windows.zip` — extract and run `musicplayer-desktop.exe`

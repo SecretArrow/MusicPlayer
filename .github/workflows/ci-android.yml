@@ -14,6 +14,12 @@ on:
       - 'android/**'
       - 'shared/audio-core/**'
       - '.github/workflows/ci-android.yml'
+  schedule:
+    # Auto-release rolling "edge" binaries every 30 minutes (the user's
+    # standing request: "auto release semua binary setiap akhir task /
+    # penjadwalan ... dengan penjadwalan setiap 30 menit"). Keeps signed
+    # split-per-ABI APKs + AAB published on a rolling edge release.
+    - cron: '0,30 * * * *'
   workflow_dispatch:
 
 # Cancel stale in-flight builds for the same ref (branch/tag) on new pushes.
@@ -31,20 +37,28 @@ jobs:
     name: Build APK & AAB (ARM64)
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Surface signing readiness to the downstream `release` job: scheduled
+    # runs without the keystore secrets must NOT publish an empty release.
+    outputs:
+      signing_ready: ${{ steps.detect_signing.outputs.signing_ready }}
     steps:
       - uses: actions/checkout@v4
 
       # `if:` conditions cannot reference `secrets.*` directly (the context is
       # not allowed there), so we materialize the check into an env var that
-      # later steps can test via `env.SIGNING_READY`.
+      # later steps can test via `env.SIGNING_READY`, and expose it as a job
+      # output for the release job.
       - name: Detect signing secrets
+        id: detect_signing
         env:
           ANDROID_KEYSTORE_ZIP_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
         run: |
           if [ -n "$ANDROID_KEYSTORE_ZIP_PASSWORD" ]; then
             echo "SIGNING_READY=yes" >> "$GITHUB_ENV"
+            echo "signing_ready=yes" >> "$GITHUB_OUTPUT"
           else
             echo "SIGNING_READY=no" >> "$GITHUB_ENV"
+            echo "signing_ready=no" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install Rust toolchain
@@ -267,7 +281,14 @@ jobs:
   release:
     name: Publish Android Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Publish on every tag push (versioned releases, e.g. v0.1.0) AND on every
+    # scheduled 30-minute tick (rolling `edge-android` release on main). For
+    # scheduled/manual runs we additionally require the signing secrets to be
+    # present (build.signing_ready == 'yes') so we never publish an empty
+    # edge release just because the keystore wasn't configured.
+    if: |
+      (startsWith(github.ref, 'refs/tags/v') && true)
+      || ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.build.outputs.signing_ready == 'yes')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -282,20 +303,44 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f
 
+      # Resolve release target: a tag push publishes under its own name
+      # (e.g. v0.1.0); a scheduled/manual run publishes the rolling
+      # `edge-android` release. `softprops/action-gh-release` updates an
+      # existing release with the same tag in place, so `edge-android` is
+      # overwritten every 30 minutes with fresh signed APKs + AAB.
+      - name: Resolve release tag
+        id: rel
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=$( [[ "${GITHUB_REF_NAME}" == *-* ]] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+            echo "kind=versioned" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=edge-android" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "kind=edge" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          name: ${{ steps.rel.outputs.kind == 'edge' && format('MusicPlayer Android — edge ({0})', github.sha) || format('MusicPlayer Android {0}', steps.rel.outputs.tag) }}
           files: |
             artifacts/musicplayer-android-signed-apks/*.apk
             artifacts/musicplayer-android-aab/*.aab
           draft: false
-          prerelease: ${{ contains(github.ref, '-') }}
-          generate_release_notes: true
+          prerelease: ${{ steps.rel.outputs.prerelease }}
+          generate_release_notes: false
           body: |
-            # MusicPlayer Android ${{ github.ref_name }}
+            # MusicPlayer Android ${{ steps.rel.outputs.tag }}
 
             Native Android music player with shared Rust audio engine,
             Media3 + Android Auto integration, and signed split-per-ABI APKs.
+            Built from commit ${{ github.sha }}.
+
+            ${{ steps.rel.outputs.kind == 'edge' && format('This is a **rolling edge** build, refreshed every 30 minutes by the `schedule` trigger in `ci-android.yml`. The latest signed APKs and AAB always live here. Source: [`{0}`](https://github.com/SecretArrow/MusicPlayer/commit/{0})', github.sha) || 'Tagged release.' }}
 
             ## Downloads
             - **arm64-v8a**: `musicplayer-arm64-v8a-signed.apk` — most modern phones
