@@ -25,8 +25,8 @@ use std::sync::Arc;
 ///                    success or non-zero on any panic/error.
 ///   (no flags)       Normal launch: full event loop + window.
 fn parse_cli_flags() -> Option<SmokeAction> {
-    let mut args = std::env::args().skip(1);
-    while let Some(arg) = args.next() {
+    let args = std::env::args().skip(1);
+    for arg in args {
         match arg.as_str() {
             "--version" | "-V" => return Some(SmokeAction::Version),
             "--smoke-test" => return Some(SmokeAction::SmokeTest),
