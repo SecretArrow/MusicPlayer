@@ -1,5 +1,37 @@
 name: CI — Android native app (Kotlin + Rust + Media3 + Android Auto)
 
+# ──────────────────────────────────────────────────────────────────────────
+# Auto-release loop (per user request: "auto release ... tambah auto uji
+# app/apk setelah rilis, lalu auto fix error, lalu rilis kembali, begitu
+# terus menerus berulang sampai sempurna").
+#
+#   schedule (0,30 * * * *)
+#       │
+#       ▼
+#   ci-android.yml ── build + sign split-per-ABI APK + AAB ── publish `edge-android`
+#                                       │
+#                                       ▼
+#                              smoke-test.yml  (workflow_run trigger)
+#                                       │
+#                       pass ── done    │ fail
+#                                       ▼
+#                              fix-loop.yml  (auto_fix.py --commit)
+#                                       │
+#                  patches applied ─────┼──── no pattern matched
+#                                       │            │
+#                                       ▼            ▼
+#                                  push commit    open issue
+#                                       │
+#                                       ▼
+#                                  re-triggers ci-android
+#                                       │
+#                                  ─── loop forever ───
+#
+# This file owns: schedule trigger + build + sign + edge-android release.
+# Companion files: smoke-test.yml, fix-loop.yml, scripts/smoke_test.py,
+#                  scripts/auto_fix.py.
+# ──────────────────────────────────────────────────────────────────────────
+
 on:
   push:
     branches: [main, master]

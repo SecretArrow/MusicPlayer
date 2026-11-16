@@ -1,0 +1,227 @@
+name: Smoke Test — post-release validation + auto-fix trigger
+
+# This workflow closes the loop requested by the user:
+#   "auto release ... tambah auto uji app/apk setelah rilis, lalu auto fix
+#    error, lalu rilis kembali, begitu terus menerus berulang sampai
+#    sempurna"
+#
+#   schedule (ci-desktop/ci-android) → release → smoke-test (this file)
+#                                                          │
+#                                            pass → done  │ fail → dispatch fix-loop.yml
+#                                                                       │
+#                                                  fix-loop applies patches → push → re-trigger ci
+#                                                                                          │
+#                                                                        ─── loop forever ────┘
+#
+# Triggers:
+#   workflow_run     Whenever ci-desktop or ci-android completes (success or
+#                    failure). We re-run smoke checks on every release, then
+#                    on failure dispatch the fix-loop workflow.
+#   workflow_dispatch Manual "Run workflow" button from the Actions UI.
+
+on:
+  workflow_run:
+    workflows:
+      - "CI — Desktop native app (Windows + Linux + macOS)"
+      - "CI — Android native app (Kotlin + Rust + Media3 + Android Auto)"
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which smoke test to run"
+        type: choice
+        options:
+          - desktop-linux
+          - android-apk
+          - both
+        default: both
+      release_tag:
+        description: "Release tag to validate (default: edge / edge-android)"
+        type: string
+        required: false
+
+# Allow concurrent smoke tests across targets (they don't share artifacts).
+concurrency:
+  group: smoke-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+env:
+  SMOKE_WORKSPACE: ${{ github.workspace }}/smoke-workspace
+
+permissions:
+  contents: read
+  actions: read
+  # `actions: write` is required to dispatch the fix-loop workflow via
+  # `gh workflow run` / `actions/github-script` POST /repos/{owner}/{repo}/actions/workflows/fix-loop.yml/dispatches.
+  actions: write
+
+jobs:
+  # Decide what to run based on the triggering event:
+  #   - On workflow_run: run the smoke test matching the upstream workflow.
+  #   - On workflow_dispatch: honor the input choice.
+  decide:
+    name: Decide smoke target
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch')
+      || (github.event.workflow_run.conclusion == 'success')
+      || (github.event.workflow_run.conclusion == 'failure')
+    outputs:
+      run_desktop: ${{ steps.set.outputs.run_desktop }}
+      run_android: ${{ steps.set.outputs.run_android }}
+      upstream_status: ${{ steps.set.outputs.upstream_status }}
+      upstream_workflow: ${{ steps.set.outputs.upstream_workflow }}
+      upstream_run_id: ${{ steps.set.outputs.upstream_run_id }}
+    steps:
+      - id: set
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          WF_NAME: ${{ github.event.workflow_run.name }}
+          WF_CONCL: ${{ github.event.workflow_run.conclusion }}
+          WF_ID: ${{ github.event.workflow_run.id }}
+          INPUT_TARGET: ${{ github.event.inputs.target }}
+        run: |
+          run_desktop=false
+          run_android=false
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            case "$INPUT_TARGET" in
+              desktop-linux) run_desktop=true ;;
+              android-apk)   run_android=true ;;
+              both)          run_desktop=true; run_android=true ;;
+            esac
+          else
+            # workflow_run: match the upstream workflow name.
+            case "$WF_NAME" in
+              *Desktop*)   run_desktop=true ;;
+              *Android*)   run_android=true ;;
+            esac
+          fi
+          echo "run_desktop=$run_desktop"        >> "$GITHUB_OUTPUT"
+          echo "run_android=$run_android"        >> "$GITHUB_OUTPUT"
+          echo "upstream_status=${WF_CONCL:-dispatch}"  >> "$GITHUB_OUTPUT"
+          echo "upstream_workflow=${WF_NAME:-manual}"   >> "$GITHUB_OUTPUT"
+          echo "upstream_run_id=${WF_ID:-}"      >> "$GITHUB_OUTPUT"
+          echo "::notice::target desktop=$run_desktop android=$run_android upstream=${WF_CONCL:-dispatch}"
+
+  smoke-desktop-linux:
+    name: Smoke test desktop Linux binary
+    needs: decide
+    if: needs.decide.outputs.run_desktop == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gh CLI
+        # gh ships preinstalled on ubuntu-latest, but pin the version
+        # explicitly so we know the smoke_test.py contract.
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            echo "::error::gh CLI is required to query releases"
+            exit 1
+          fi
+          gh --version
+
+      - name: Run desktop smoke test
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SMOKE_RELEASE_TAG: ${{ github.event.inputs.release_tag || 'edge' }}
+        run: |
+          python3 scripts/smoke_test.py --target desktop-linux
+
+  smoke-android-apk:
+    name: Smoke test Android APK (aapt badging)
+    needs: decide
+    if: needs.decide.outputs.run_android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Android build-tools (for aapt)
+        run: |
+          SDKM="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" --install "build-tools;34.0.0"
+
+      - name: Add build-tools to PATH
+        run: |
+          echo "$ANDROID_HOME/build-tools/34.0.0" >> "$GITHUB_PATH"
+
+      - name: Run APK smoke test
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SMOKE_RELEASE_TAG: ${{ github.event.inputs.release_tag || 'edge-android' }}
+        run: |
+          python3 scripts/smoke_test.py --target android-apk
+
+  # ───────────────────────────────────────────────────────────────────────
+  # Failure dispatch: if EITHER smoke job failed, OR the upstream CI run
+  # itself failed (workflow_run.conclusion == 'failure'), dispatch the
+  # fix-loop workflow with the run ID so it can fetch the failed log.
+  # ───────────────────────────────────────────────────────────────────────
+  trigger-fix-loop:
+    name: Dispatch fix-loop on failure
+    needs: [decide, smoke-desktop-linux, smoke-android-apk]
+    if: |
+      always()
+      && (needs.smoke-desktop-linux.result == 'failure'
+          || needs.smoke-android-apk.result == 'failure'
+          || needs.decide.outputs.upstream_status == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dispatch fix-loop workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_RUN_ID: ${{ needs.decide.outputs.upstream_run_id }}
+          UPSTREAM_STATUS: ${{ needs.decide.outputs.upstream_status }}
+          UPSTREAM_WORKFLOW: ${{ needs.decide.outputs.upstream_workflow }}
+        run: |
+          # If we have no upstream run ID (manual dispatch from a smoke
+          # failure), there's no failed log to fetch — the fix-loop will
+          # just re-run the build.
+          set -e
+          echo "::notice::Dispatching fix-loop (upstream=$UPSTREAM_WORKFLOW status=$UPSTREAM_STATUS run_id=${UPSTREAM_RUN_ID:-none})"
+          gh workflow run fix-loop.yml \
+            --ref main \
+            -f upstream_run_id="${UPSTREAM_RUN_ID:-}" \
+            -f upstream_workflow="${UPSTREAM_WORKFLOW:-manual}" \
+            -f upstream_status="${UPSTREAM_STATUS:-failure}" \
+            || {
+              echo "::error::Failed to dispatch fix-loop.yml"
+              exit 1
+            }
+          echo "fix-loop dispatched."
+
+  # Final summary printed in the Actions UI for quick triage.
+  summary:
+    name: Smoke summary
+    needs: [decide, smoke-desktop-linux, smoke-android-apk, trigger-fix-loop]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit summary
+        shell: bash
+        env:
+          DESKTOP: ${{ needs.smoke-desktop-linux.result }}
+          ANDROID: ${{ needs.smoke-android-apk.result }}
+          FIX_DISPATCHED: ${{ needs.trigger-fix-loop.result }}
+        run: |
+          {
+            echo "## Smoke test results"
+            echo ""
+            echo "| Target | Result |"
+            echo "| --- | --- |"
+            echo "| desktop-linux | ${DESKTOP:-skipped} |"
+            echo "| android-apk   | ${ANDROID:-skipped} |"
+            echo ""
+            echo "Fix-loop dispatched: **${FIX_DISPATCHED:-skipped}**"
+          } >> "$GITHUB_STEP_SUMMARY"

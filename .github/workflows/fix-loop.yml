@@ -1,0 +1,213 @@
+name: Fix Loop — auto-patch failing CI, push, re-release
+
+# Triggered by smoke-test.yml when a release artifact fails its smoke test
+# (or when the upstream ci-desktop / ci-android run itself failed).
+#
+# Pipeline:
+#   1. Fetch the failed workflow log (gh run view --log) — or rerun the
+#      build locally to capture a fresh log.
+#   2. Run scripts/auto_fix.py --log-file <captured> --commit.
+#      - If a known mechanical pattern is detected → patch source → git
+#        add -u → commit → push. Push re-triggers ci-desktop + ci-android,
+#        which publish fresh edge releases, which trigger smoke-test → loop.
+#      - If no known pattern is recognized → open an issue with the log
+#        excerpt so a human can pick it up.
+#
+# Safety:
+#   - The script never deletes user code; it only edits whitespace, semicolons,
+#     cargo fmt diffs, Cargo.toml feature lists, lint baselines, and workflow
+#     env exports.
+#   - It uses the built-in `GITHUB_TOKEN` for both pushing the commit
+#     (contents: write) and opening the issue (issues: write). No PAT.
+#   - The loop is bounded: if auto_fix cannot patch the failure, an issue is
+#     opened and the loop halts pending human review.
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_run_id:
+        description: "Run ID of the failed ci-desktop / ci-android / smoke run"
+        type: string
+        required: false
+      upstream_workflow:
+        description: "Name of the upstream workflow that failed"
+        type: string
+        required: false
+      upstream_status:
+        description: "Status of the upstream workflow"
+        type: string
+        required: false
+
+concurrency:
+  # Serialize fix-loop runs so we don't push competing commits. A new
+  # dispatch cancels an in-flight one — the latest failure wins.
+  group: fix-loop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: read
+  issues: write
+
+env:
+  GITHUB_WORKSPACE: ${{ github.workspace }}
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  fetch-and-fix:
+    name: Capture failing log, auto-fix, push
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `gh` commits + pushes via the token, so we need a persisting
+          # identity. The default GITHUB_TOKEN is fine for pushing to the
+          # branch that triggered the workflow.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure git identity (for auto-fix commits)
+        run: |
+          git config --global user.name  "musicplayer-auto-fix[bot]"
+          git config --global user.email "auto-fix@musicplayer.local"
+
+      - name: Capture failing log
+        id: capture
+        env:
+          UPSTREAM_RUN_ID: ${{ github.event.inputs.upstream_run_id }}
+        run: |
+          mkdir -p .logs
+          # If we have a run ID, fetch its log; otherwise rerun the build
+          # locally to capture a fresh log.
+          if [ -n "$UPSTREAM_RUN_ID" ]; then
+            echo "::notice::Fetching log for run $UPSTREAM_RUN_ID"
+            gh run view "$UPSTREAM_RUN_ID" --log > .logs/failed.log 2>&1 || {
+              echo "::warning::gh run view --log failed; falling back to local rebuild"
+              touch .logs/failed.log
+            }
+          else
+            echo "::notice::No upstream run ID; will rebuild to capture log"
+            touch .logs/failed.log
+          fi
+          echo "log_path=$(pwd)/.logs/failed.log" >> "$GITHUB_OUTPUT"
+          # Show the first / last 50 lines so they appear in the run UI.
+          echo "--- log head ---"
+          head -n 50 .logs/failed.log || true
+          echo "--- log tail ---"
+          tail -n 50 .logs/failed.log || true
+
+      - name: Install Rust toolchain (in case we need to reproduce)
+        if: github.event.inputs.upstream_run_id == ''
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rebuild locally to capture fresh failures (if no upstream log)
+        if: github.event.inputs.upstream_run_id == ''
+        run: |
+          # Capture whatever fails locally into .logs/failed.log so auto_fix
+          # has something to work with. Continue past each step so the file
+          # accumulates every failure.
+          set +e
+          {
+            echo "### cargo fmt --check"
+            (cd desktop && cargo fmt --all -- --check)
+            (cd shared/audio-core && cargo fmt --all -- --check)
+            echo "### cargo clippy desktop"
+            (cd desktop && cargo clippy --all-targets -- -D warnings)
+            echo "### cargo clippy audio-core"
+            (cd shared/audio-core && cargo clippy --all-targets -- -D warnings)
+            echo "### cargo test audio-core"
+            (cd shared/audio-core && cargo test --no-default-features --features decoder,metadata,effects --no-fail-fast)
+            echo "### cargo build desktop release"
+            (cd desktop && cargo build --release)
+          } >> .logs/failed.log 2>&1
+
+      - name: Run auto-fix
+        id: autofix
+        run: |
+          set +e
+          python3 scripts/auto_fix.py --log-file .logs/failed.log --commit
+          echo "auto_fix_exit=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Did auto-fix change anything?
+        id: changed
+        run: |
+          # auto_fix.py --commit pushes when it had changes; check if HEAD
+          # moved during this run by comparing to the checkout SHA.
+          BEFORE="${{ github.sha }}"
+          AFTER=$(git rev-parse HEAD)
+          echo "before=$BEFORE after=$AFTER"
+          if [ "$BEFORE" != "$AFTER" ]; then
+            echo "changed=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ────────────────────────────────────────────────────────────────────
+      # If auto_fix could NOT patch the failure, open an issue so a human
+      # can take over. We never silently swallow a failure.
+      # ────────────────────────────────────────────────────────────────────
+      - name: Open issue on unfixable failure
+        if: steps.changed.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_RUN_ID: ${{ github.event.inputs.upstream_run_id }}
+          UPSTREAM_WORKFLOW: ${{ github.event.inputs.upstream_workflow }}
+          AUTO_FIX_EXIT: ${{ steps.autofix.outputs.auto_fix_exit }}
+        run: |
+          # Trim log to 4000 chars to fit inside the issue body.
+          LOG_EXCERPT=$(tail -n 200 .logs/failed.log | head -c 4000)
+          TITLE="auto-fix loop: no pattern matched ($UPSTREAM_WORKFLOW)"
+          BODY=$(cat <<EOF
+          ## Auto-fix loop hit an unpatchable failure
+
+          The smoke-test workflow dispatched the fix-loop after the upstream
+          CI run failed. The auto-fix script scanned the log but no known
+          mechanical pattern matched, so the source tree was not modified.
+
+          - **Upstream workflow**: \`$UPSTREAM_WORKFLOW\`
+          - **Upstream run id**: \`${UPSTREAM_RUN_ID:-none}\`
+          - **auto_fix.py exit code**: \`$AUTO_FIX_EXIT\` (10 = no pattern matched)
+
+          ### Log excerpt (last 200 lines / 4 KB)
+
+          \`\`\`
+          $LOG_EXCERPT
+          \`\`\`
+
+          ### Next step
+          Add a new pattern to \`scripts/auto_fix.py\` covering this failure,
+          merge, and the loop will pick it up on the next scheduled run.
+
+          _Automatically opened by \`fix-loop.yml\`._
+          EOF
+          )
+          gh issue create \
+            --title "$TITLE" \
+            --body  "$BODY" \
+            --label "auto-fix-stuck" 2>&1 || \
+            gh issue create --title "$TITLE" --body "$BODY"
+
+      - name: Notify on successful patch
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          echo "::notice::auto-fix applied a patch and pushed. The new commit will trigger ci-desktop + ci-android → smoke-test → loop."
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Fix loop outcome"
+            echo ""
+            echo "- Upstream workflow: \`${{ github.event.inputs.upstream_workflow }}\`"
+            echo "- Upstream run id: \`${{ github.event.inputs.upstream_run_id }}\`"
+            echo "- Auto-fix patched + pushed: **${{ steps.changed.outputs.changed }}**"
+            echo ""
+            if [ "${{ steps.changed.outputs.changed }}" = "true" ]; then
+              echo "✅ Loop continues: ci-desktop + ci-android will re-run, re-release, and re-trigger smoke-test."
+            else
+              echo "⚠️ Loop halted: an issue has been opened for manual review."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

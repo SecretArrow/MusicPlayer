@@ -1,5 +1,37 @@
 name: CI — Desktop native app (Windows + Linux + macOS)
 
+# ──────────────────────────────────────────────────────────────────────────
+# Auto-release loop (per user request: "auto release ... tambah auto uji
+# app/apk setelah rilis, lalu auto fix error, lalu rilis kembali, begitu
+# terus menerus berulang sampai sempurna").
+#
+#   schedule (0,30 * * * *)
+#       │
+#       ▼
+#   ci-desktop.yml ── build + test ── publish rolling `edge` release
+#                                       │
+#                                       ▼
+#                              smoke-test.yml  (workflow_run trigger)
+#                                       │
+#                       pass ── done    │ fail
+#                                       ▼
+#                              fix-loop.yml  (auto_fix.py --commit)
+#                                       │
+#                  patches applied ─────┼──── no pattern matched
+#                                       │            │
+#                                       ▼            ▼
+#                                  push commit    open issue
+#                                       │
+#                                       ▼
+#                                  re-triggers ci-desktop
+#                                       │
+#                                  ─── loop forever ───
+#
+# This file owns: schedule trigger + build + edge release.
+# Companion files: smoke-test.yml, fix-loop.yml, scripts/smoke_test.py,
+#                  scripts/auto_fix.py.
+# ──────────────────────────────────────────────────────────────────────────
+
 on:
   push:
     branches: [main, master]
