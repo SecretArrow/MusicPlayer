@@ -251,6 +251,15 @@ jobs:
       - name: Build per-ABI APKs (split)
         working-directory: android
         run: ./gradlew assembleRelease  # splits.abi config produces per-ABI APKs automatically
+        # Gradle's signingConfig "ci" (see android/app/build.gradle.kts) reads
+        # KS_FILE (exported by the previous step via GITHUB_ENV), KS_PWD,
+        # KEY_ALIAS and KEY_PWD. All three must be present as env vars here
+        # or `:app:packageRelease` fails with
+        # "SigningConfig 'ci' is missing required property 'storePassword'".
+        env:
+          KS_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Re-sign & verify split APKs (per-ABI)
         if: ${{ env.SIGNING_READY == 'yes' }}
@@ -284,6 +293,12 @@ jobs:
       - name: Assemble AAB
         working-directory: android
         run: ./gradlew bundleRelease
+        # Same signingConfig "ci" as assembleRelease — the AAB is signed
+        # natively by Gradle when these env vars are present.
+        env:
+          KS_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Cleanup signing material
         if: ${{ always() }}
