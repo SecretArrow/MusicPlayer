@@ -33,7 +33,9 @@ def rand_pw(n=24):
 
 
 KS_PASS = rand_pw()
-KEY_PASS = rand_pw()
+# PKCS12 keystores do not support a different key password — keytool
+# silently uses the store password for the key. Keep them identical.
+KEY_PASS = KS_PASS
 ZIP_PASS = rand_pw()
 ALIAS = "musicplayer"
 
