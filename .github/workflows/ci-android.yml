@@ -218,25 +218,18 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
-      - name: Build per-ABI APKs (split)
-        working-directory: android
-        run: ./gradlew assembleRelease  # splits.abi config produces per-ABI APKs automatically
-        env:
-          ANDROID_KEYSTORE_ZIP_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-
-      # Decode the keystore archive BEFORE signing: prefer the
+      # Decode the keystore archive BEFORE gradle builds: prefer the
       # ANDROID_KEYSTORE_ARCHIVE secret (base64-encoded zip), fall back to the
-      # repo path android/key-sign-apk.zip. The archive contents are never
-      # echoed or listed — only extracted in-place by the sign step.
+      # repo path android/key-sign-apk.zip. Contents are never echoed —
+      # extracted into android/.signing and exported as KS_FILE so Gradle
+      # natively signs both the split APKs and the AAB.
       - name: Prepare keystore archive
         if: ${{ env.SIGNING_READY == 'yes' }}
         env:
           ANDROID_KEYSTORE_ARCHIVE: ${{ secrets.ANDROID_KEYSTORE_ARCHIVE }}
+          ANDROID_KEYSTORE_ZIP_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
         run: |
-          mkdir -p android
+          mkdir -p android/.signing
           if [ -n "$ANDROID_KEYSTORE_ARCHIVE" ]; then
             printf '%s' "$ANDROID_KEYSTORE_ARCHIVE" | base64 --decode > android/key-sign-apk.zip
             echo "Keystore archive decoded from secret ANDROID_KEYSTORE_ARCHIVE."
@@ -246,23 +239,36 @@ jobs:
             echo "::error::Signing requested but no keystore archive found. Set the ANDROID_KEYSTORE_ARCHIVE secret (base64) or commit android/key-sign-apk.zip."
             exit 1
           fi
+          (cd android/.signing && unzip -o -P "$ANDROID_KEYSTORE_ZIP_PASSWORD" ../key-sign-apk.zip)
+          KS_FILE=$(find "$PWD/android/.signing" -name '*.jks' -o -name '*.keystore' | head -1)
+          if [ -z "$KS_FILE" ]; then
+            echo "::error::Keystore not found inside the archive"
+            exit 1
+          fi
+          echo "KS_FILE=$KS_FILE" >> "$GITHUB_ENV"
+          echo "Keystore exported to KS_FILE (path only, never its content)."
 
-      - name: Sign split APKs (per-ABI)
+      - name: Build per-ABI APKs (split)
+        working-directory: android
+        run: ./gradlew assembleRelease  # splits.abi config produces per-ABI APKs automatically
+
+      - name: Re-sign & verify split APKs (per-ABI)
         if: ${{ env.SIGNING_READY == 'yes' }}
         working-directory: android
         env:
-          KS_ZIP_PWD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
           KS_PWD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PWD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          # Extract keystore from the encrypted archive (password from Secret).
-          mkdir -p .signing && cd .signing
-          unzip -P "$KS_ZIP_PWD" ../key-sign-apk.zip
-          KS_FILE=$(find . -name '*.jks' -o -name '*.keystore' | head -1)
-          [ -n "$KS_FILE" ] || { echo "Keystore not found in archive"; exit 1; }
-
-          for apk in ../app/build/outputs/apk/release/*/*.apk; do
+          # The keystore was already extracted by "Prepare keystore archive"
+          # and exported as KS_FILE (absolute path). Gradle signed the APKs
+          # with it during assembleRelease; apksigner re-signs and renames
+          # each per-ABI APK to musicplayer-<abi>-signed.apk for release.
+          if [ -z "$KS_FILE" ] || [ ! -f "$KS_FILE" ]; then
+            echo "::error::KS_FILE missing — keystore extraction failed"
+            exit 1
+          fi
+          for apk in app/build/outputs/apk/release/*/*.apk; do
             abi=$(basename "$(dirname "$apk")")
             out=$(dirname "$apk")/musicplayer-${abi}-signed.apk
             "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
@@ -274,18 +280,18 @@ jobs:
               "$apk"
             "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$out"
           done
-          # Cleanup — never leave the keystore on disk after signing.
-          shred -u "$KS_FILE" 2>/dev/null || rm -f "$KS_FILE"
-          cd .. && rm -rf .signing
 
       - name: Assemble AAB
         working-directory: android
         run: ./gradlew bundleRelease
-        env:
-          ANDROID_KEYSTORE_ZIP_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_ZIP_PASSWORD }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Cleanup signing material
+        if: ${{ always() }}
+        run: |
+          # Never leave signing material on the runner disk.
+          shred -u android/key-sign-apk.zip 2>/dev/null || rm -f android/key-sign-apk.zip
+          rm -rf android/.signing
+          echo "Signing material removed from runner."
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -34,6 +36,25 @@ android {
         }
     }
 
+    // CI signing: the workflow extracts the keystore into android/.signing and
+    // exports KS_FILE / KS_PWD / KEY_ALIAS / KEY_PWD. When present, both the
+    // split APKs and the AAB are signed natively by Gradle (so `app-release.aab`
+    // is genuinely signed, not unsigned). Without the env vars (local builds,
+    // no-secrets CI) the release build stays unsigned — same as before.
+    val ksPath: String? = System.getenv("KS_FILE")
+    val ksReady: Boolean = !ksPath.isNullOrBlank() && File(ksPath).exists()
+
+    signingConfigs {
+        if (ksReady) {
+            create("ci") {
+                storeFile = File(ksPath!!)
+                storePassword = System.getenv("KS_PWD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PWD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -42,8 +63,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Signing config is wired in CI from GitHub Secrets.
-            // `signingConfig` is set dynamically when secrets are present.
+            if (ksReady) {
+                signingConfig = signingConfigs.getByName("ci")
+            }
         }
         debug {
             isMinifyEnabled = false
