@@ -277,9 +277,17 @@ jobs:
             echo "::error::KS_FILE missing — keystore extraction failed"
             exit 1
           fi
-          for apk in app/build/outputs/apk/release/*/*.apk; do
-            abi=$(basename "$(dirname "$apk")")
-            out=$(dirname "$apk")/musicplayer-${abi}-signed.apk
+          # AGP with `splits.abi` writes per-ABI APKs to
+          #   app/build/outputs/apk/<abi>/release/app-<abi>-release.apk
+          # (NOT release/<abi>/). Match the actual layout with a permissive
+          # glob; nullglob makes an unmatched pattern expand to nothing so
+          # apksigner never receives a literal "*.apk" filename.
+          shopt -s nullglob
+          found=0
+          for apk in app/build/outputs/apk/*/*/app-*-release.apk; do
+            found=1
+            abi=$(basename "$(dirname "$(dirname "$apk")")")
+            out="$(dirname "$apk")/musicplayer-${abi}-signed.apk"
             "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
               --ks "$KS_FILE" \
               --ks-pass "pass:$KS_PWD" \
@@ -289,6 +297,11 @@ jobs:
               "$apk"
             "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$out"
           done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No per-ABI release APKs found under app/build/outputs/apk/"
+            ls -R app/build/outputs/apk/ 2>/dev/null || true
+            exit 1
+          fi
 
       - name: Assemble AAB
         working-directory: android
@@ -321,7 +334,7 @@ jobs:
         with:
           name: musicplayer-android-signed-apks
           path: |
-            android/app/build/outputs/apk/release/*/*-signed.apk
+            android/app/build/outputs/apk/*/*/musicplayer-*-signed.apk
           if-no-files-found: warn
 
       - name: Upload AAB
