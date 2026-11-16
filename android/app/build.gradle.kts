@@ -50,7 +50,12 @@ android {
                 storeFile = File(ksPath!!)
                 storePassword = System.getenv("KS_PWD")
                 keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PWD")
+                // PKCS12 keystores require the key password to equal the store
+                // password (keytool warns and ignores a different -keypass).
+                // The CI keystore was generated as PKCS12, so reuse KS_PWD
+                // here — passing a separate KEY_PWD triggers
+                // "Get Key failed: Given final block not properly padded".
+                keyPassword = System.getenv("KS_PWD")
             }
         }
     }

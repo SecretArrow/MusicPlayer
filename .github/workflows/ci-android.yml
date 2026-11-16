@@ -284,7 +284,7 @@ jobs:
               --ks "$KS_FILE" \
               --ks-pass "pass:$KS_PWD" \
               --ks-key-alias "$KEY_ALIAS" \
-              --key-pass "pass:$KEY_PWD" \
+              --key-pass "pass:$KS_PWD" \
               --out "$out" \
               "$apk"
             "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$out"
