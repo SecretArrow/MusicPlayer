@@ -53,9 +53,11 @@ env:
 
 permissions:
   contents: read
-  actions: read
   # `actions: write` is required to dispatch the fix-loop workflow via
   # `gh workflow run` / `actions/github-script` POST /repos/{owner}/{repo}/actions/workflows/fix-loop.yml/dispatches.
+  # (write implies read, so we do not also list `actions: read` here —
+  #  a duplicate key would make the workflow file fail to parse and every
+  #  run would surface as a zero-job failure.)
   actions: write
 
 jobs:
