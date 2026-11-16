@@ -39,3 +39,4 @@ Thumbs.db
 db/custom.db
 agent-ctx/
 tool-results/
+download/*.zip
