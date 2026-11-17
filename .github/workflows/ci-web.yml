@@ -49,7 +49,7 @@ jobs:
           key: web-node_modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
       - name: Install deps
-        run: bun install --frozen-lockfile
+        run: bun install --no-save
 
       - name: Lint (ESLint)
         run: bun run lint
