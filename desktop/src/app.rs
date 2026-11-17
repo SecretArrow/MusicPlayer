@@ -32,7 +32,8 @@ pub struct AppState {
     pub view: RwLock<View>,
     /// Whether the EQ panel is open.
     pub show_eq: RwLock<bool>,
-    /// Whether the queue panel is open.
+    /// Whether the queue panel is open (panel UI pending).
+    #[allow(dead_code)]
     pub show_queue: RwLock<bool>,
     /// Logical window size (DPI-independent).
     pub window_size: RwLock<(f32, f32)>,
@@ -117,11 +118,8 @@ impl AppState {
             out.set_muted(muted);
             out.set_volume(if muted { 0.0 } else { vol });
         }
-        // Without the audio feature we still keep the visual state for UI.
-        #[cfg(not(feature = "audio"))]
-        {
-            let _ = (self.volume.read(), self.muted.read());
-        }
+        // Without the audio feature there's nothing to push; the visual
+        // volume/mute state is preserved on AppState for UI display only.
     }
 
     /// Push EQ settings to the playback controller + audio output EQ chain.

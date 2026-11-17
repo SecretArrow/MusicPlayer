@@ -61,7 +61,13 @@ mod tests {
                 });
             }
         }
-        AppState::new(controller, queue, library)
+        AppState::new(
+            controller,
+            queue,
+            library,
+            #[cfg(feature = "audio")]
+            None,
+        )
     }
 
     /// Render a full frame through the real dispatcher (background + layout).
