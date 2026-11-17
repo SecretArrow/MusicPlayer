@@ -13,6 +13,8 @@ import { SettingsDialog } from "./settings-dialog";
 import { ShortcutsDialog, useKeyboardShortcuts } from "./keyboard-shortcuts";
 import { ShareDialog } from "./share-dialog";
 import { usePlayerStore } from "@/store/player-store";
+import { useLibraryHydration } from "@/lib/library-hydration";
+import { useDerivedLibrary } from "@/lib/derived-library";
 
 const emptySubscribe = () => () => {};
 
@@ -59,6 +61,11 @@ export function MusicPlayerApp() {
 
   // Global keyboard shortcuts
   useKeyboardShortcuts();
+
+  // Restore library + playlists from IndexedDB on first mount.
+  useLibraryHydration();
+  // Derive Artists/Albums collections from the local tracks whenever they change.
+  useDerivedLibrary();
 
   return (
     <div

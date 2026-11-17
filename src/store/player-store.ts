@@ -3,10 +3,6 @@
 import { useMemo } from "react";
 import { create } from "zustand";
 import {
-  demoTracks,
-  demoPlaylists,
-  demoArtists,
-  demoAlbums,
   accentPresets,
   type Track,
   type Playlist,
@@ -14,6 +10,7 @@ import {
   type Album,
 } from "@/data/music";
 import { THEMES } from "@/data/themes";
+import { persist, buildPersistConfig } from "@/lib/player-persist";
 
 export type RepeatMode = "off" | "all" | "one";
 export type AutoView = "nowplaying" | "browse" | "queue";
@@ -135,6 +132,8 @@ interface PlayerState {
   openSettings: (tab?: SettingsTab) => void;
 
   // Actions — library management
+  setPlaylists: (playlists: Playlist[]) => void;
+  setLibrary: (tracks: Track[], artists: Artist[], albums: Album[]) => void;
   addToPlaylist: (playlistId: string, trackId: string) => void;
   removeFromPlaylist: (playlistId: string, trackId: string) => void;
   createPlaylist: (title: string, description?: string) => string;
@@ -210,14 +209,16 @@ export const EQ_PRESETS: Record<string, number[]> = {
   soft: [0, 1, 2, 3, 3, 2, 1, 0, -1, -2],
 };
 
-export const usePlayerStore = create<PlayerState>((set, get) => ({
-  tracks: demoTracks,
-  playlists: demoPlaylists,
-  artists: demoArtists,
-  albums: demoAlbums,
+export const usePlayerStore = create<PlayerState>()(
+  persist(
+    (set, get) => ({
+  tracks: [],
+  playlists: [],
+  artists: [],
+  albums: [],
   localTracks: [],
 
-  queue: demoTracks.map((t) => t.id),
+  queue: [],
   currentIndex: 0,
 
   isPlaying: false,
@@ -255,7 +256,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   activeArtistId: null,
   activeAlbumId: null,
   activeGenre: null,
-  likedTrackIds: new Set(["t1", "t7"]),
+  likedTrackIds: new Set<string>(),
   showSettings: false,
   showShortcuts: false,
   showFullNowPlaying: false,
@@ -384,6 +385,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   openSettings: (tab) =>
     set({ showSettings: true, ...(tab ? { settingsTab: tab } : {}) }),
 
+  setPlaylists: (playlists) => set({ playlists }),
+  setLibrary: (tracks, artists, albums) => set({ tracks, artists, albums }),
   addToPlaylist: (playlistId, trackId) => {
     set({
       playlists: get().playlists.map((p) =>
@@ -499,7 +502,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setTime: (t) => set({ currentTime: t }),
   setDuration: (d) => set({ duration: d }),
   setIsPlaying: (p) => set({ isPlaying: p }),
-}));
+    }),
+    buildPersistConfig<PlayerState>(),
+  )
+);
+
+// Mark the store as hydrated on the client so React can avoid SSR mismatches.
+if (typeof window !== "undefined") {
+  void usePlayerStore.persist;
+}
 
 // ---------- Selector helpers ----------
 

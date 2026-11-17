@@ -132,6 +132,13 @@ export function AudioController() {
     getAudioEngine().setPreamp(eq.preamp);
   }, [eq.preamp]);
 
+  // Audio quality — simulated via a lowpass filter on the master chain.
+  // "low" → ~8 kHz, "high" → ~16 kHz, "lossless" → 20 kHz (effectively bypassed)
+  const audioQuality = usePlayerStore((s) => s.audioQuality);
+  useEffect(() => {
+    getAudioEngine().applyQuality(audioQuality);
+  }, [audioQuality]);
+
   // ---------- Media Session (lock screen, Bluetooth, Android Auto projection) ----------
 
   // Metadata + generated gradient artwork whenever the track changes

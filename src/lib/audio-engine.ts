@@ -8,12 +8,15 @@
 
 const EQ_FREQS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 
+export type AudioQuality = "low" | "high" | "lossless";
+
 export interface AudioEngine {
   ctx: AudioContext | null;
   analyser: AnalyserNode | null;
   eqFilters: BiquadFilterNode[];
   preamp: GainNode | null;
-  gain: GainNode;
+  gain: GainNode | null;
+  qualityFilter: BiquadFilterNode | null;
   source: MediaElementAudioSourceNode | null;
   ensureContext: (audio: HTMLAudioElement) => void;
   applyEq: (enabled: boolean, bands: number[]) => void;
@@ -21,6 +24,8 @@ export interface AudioEngine {
   setGain: (v: number) => void;
   /** Smooth gain ramp helper (for fade in/out) */
   rampGain: (to: number, ms: number) => void;
+  /** Apply simulated audio quality: low → lowpass ~8 kHz, lossless → bypass */
+  applyQuality: (q: AudioQuality) => void;
 }
 
 let engine: AudioEngine | null = null;
@@ -31,7 +36,8 @@ function createEngine(): AudioEngine {
     analyser: null,
     eqFilters: [],
     preamp: null,
-    gain: null as unknown as GainNode,
+    gain: null,
+    qualityFilter: null,
     source: null,
     ensureContext(audio: HTMLAudioElement) {
       if (eng.ctx) {
@@ -55,6 +61,12 @@ function createEngine(): AudioEngine {
           filter.gain.value = 0;
           return filter;
         });
+        // Quality filter — a lowpass that simulates the bitrate ceiling.
+        // Default: lossless (cutoff 20 kHz — effectively bypassed).
+        const qualityFilter = ctx.createBiquadFilter();
+        qualityFilter.type = "lowpass";
+        qualityFilter.frequency.value = 20000;
+        qualityFilter.Q.value = 0.7;
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
         analyser.smoothingTimeConstant = 0.82;
@@ -62,14 +74,15 @@ function createEngine(): AudioEngine {
         preamp.gain.value = 1;
         const gain = ctx.createGain();
 
-        // Wire: source → filters... → preamp → analyser → gain → destination
+        // Wire: source → EQ chain → preamp → qualityFilter → analyser → gain → destination
         let node: AudioNode = source;
         for (const f of filters) {
           node.connect(f);
           node = f;
         }
         node.connect(preamp);
-        preamp.connect(analyser);
+        preamp.connect(qualityFilter);
+        qualityFilter.connect(analyser);
         analyser.connect(gain);
         gain.connect(ctx.destination);
 
@@ -77,6 +90,7 @@ function createEngine(): AudioEngine {
         eng.source = source;
         eng.eqFilters = filters;
         eng.preamp = preamp;
+        eng.qualityFilter = qualityFilter;
         eng.analyser = analyser;
         eng.gain = gain;
       } catch {
@@ -96,15 +110,23 @@ function createEngine(): AudioEngine {
       eng.preamp.gain.setTargetAtTime(linear, eng.ctx.currentTime, 0.05);
     },
     setGain(v) {
-      if (!eng.ctx) return;
+      if (!eng.ctx || !eng.gain) return;
       eng.gain.gain.setTargetAtTime(v, eng.ctx.currentTime, 0.03);
     },
     rampGain(to, ms) {
-      if (!eng.ctx) return;
+      if (!eng.ctx || !eng.gain) return;
       const t = eng.ctx.currentTime;
       eng.gain.gain.cancelScheduledValues(t);
       eng.gain.gain.setValueAtTime(eng.gain.gain.value, t);
       eng.gain.gain.linearRampToValueAtTime(to, t + ms / 1000);
+    },
+    applyQuality(q) {
+      if (!eng.ctx || !eng.qualityFilter) return;
+      // Low quality → ~8 kHz ceiling (simulated MP3 ~96 kbps)
+      // High quality → 16 kHz ceiling (MP3 ~320 kbps)
+      // Lossless → 20 kHz (effectively bypassed)
+      const cutoff = q === "low" ? 8000 : q === "high" ? 16000 : 20000;
+      eng.qualityFilter.frequency.setTargetAtTime(cutoff, eng.ctx.currentTime, 0.05);
     },
   };
   return eng;

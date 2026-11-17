@@ -54,6 +54,7 @@ import { RecentView } from "../recent-view";
 import { StatsView } from "../stats-view";
 import { NowPlayingOverlay } from "../now-playing-overlay";
 import type { Track } from "@/data/music";
+import { Music4, FolderOpen, Sparkles } from "lucide-react";
 
 // ---------- Selector helpers ----------
 
@@ -268,6 +269,13 @@ function HomeView() {
   const setActiveGenre = usePlayerStore((s) => s.setActiveGenre);
   const playPlaylist = usePlayerStore((s) => s.playPlaylist);
   const allTracks = useAllTracks();
+  const setActiveAlbum = usePlayerStore((s) => s.setActiveAlbum);
+  const albums = usePlayerStore((s) => s.albums);
+
+  // ---------- Empty state: no library yet ----------
+  if (allTracks.length === 0 && playlists.length === 0) {
+    return <EmptyLibraryState onGoToLibrary={() => setActiveView("library")} />;
+  }
 
   const recent = recentPlayed.length > 0 ? recentPlayed : allTracks.slice(0, 6).map((t) => t.id);
   return (
@@ -275,102 +283,196 @@ function HomeView() {
       <section>
         <p className="text-sm text-zinc-400">Good evening</p>
         <h1 className="mt-1 text-3xl font-bold text-white">
-          Tonight&apos;s lineup, picked for you
+          Your library, your sound
         </h1>
       </section>
 
       {/* Quick picks */}
-      <section>
-        <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2 @3xl:grid-cols-3">
-          {playlists.slice(0, 6).map((pl) => (
-            <div
-              key={pl.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                setActiveView("library");
-                setActivePlaylist(pl.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
+      {playlists.length > 0 && (
+        <section>
+          <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2 @3xl:grid-cols-3">
+            {playlists.slice(0, 6).map((pl) => (
+              <div
+                key={pl.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => {
                   setActiveView("library");
                   setActivePlaylist(pl.id);
-                }
-              }}
-              className="group flex cursor-pointer items-center gap-3 rounded-md bg-white/[0.06] pr-3 text-left transition-colors hover:bg-white/10"
-            >
-              <div className="h-16 w-16 shrink-0" style={{ background: pl.cover }} />
-              <div className="min-w-0 flex-1 py-2">
-                <div className="truncate text-sm font-semibold text-white">{pl.title}</div>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  playPlaylist(pl.id);
                 }}
-                aria-label={`Play ${pl.title}`}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--accent)] text-zinc-950 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    setActiveView("library");
+                    setActivePlaylist(pl.id);
+                  }
+                }}
+                className="group flex cursor-pointer items-center gap-3 rounded-md bg-white/[0.06] pr-3 text-left transition-colors hover:bg-white/10"
               >
-                <Play className="ml-0.5 h-4 w-4" fill="currentColor" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
+                <div className="h-16 w-16 shrink-0" style={{ background: pl.cover }} />
+                <div className="min-w-0 flex-1 py-2">
+                  <div className="truncate text-sm font-semibold text-white">{pl.title}</div>
+                  <div className="truncate text-xs text-zinc-400">
+                    Playlist · {pl.trackIds.length} tracks
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playPlaylist(pl.id);
+                  }}
+                  aria-label={`Play ${pl.title}`}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--accent)] text-zinc-950 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+                >
+                  <Play className="ml-0.5 h-4 w-4" fill="currentColor" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
-      {/* Genre chips */}
-      <section>
-        <h2 className="mb-3 text-xl font-bold text-white">Browse genres</h2>
-        <div className="flex flex-wrap gap-2">
-          {demoGenres.map((g) => (
+      {/* Genre chips (only when there are tracks) */}
+      {allTracks.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-xl font-bold text-white">Browse by genre</h2>
+          <div className="flex flex-wrap gap-2">
+            {Array.from(new Set(allTracks.map((t) => t.genre)))
+              .filter((g) => g && g !== "Unknown")
+              .slice(0, 12)
+              .map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setActiveGenre(g)}
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+                >
+                  {g}
+                </button>
+              ))}
+          </div>
+        </section>
+      )}
+
+      {allTracks.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white">Your tracks</h2>
             <button
-              key={g.name}
-              onClick={() => setActiveGenre(g.name)}
-              className="rounded-full border px-4 py-1.5 text-sm font-medium text-white transition-transform hover:scale-105"
-              style={{ background: g.cover }}
+              onClick={() => setActiveView("library")}
+              className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white"
             >
-              {g.name}
+              Show all <ChevronRight className="h-3 w-3" />
             </button>
-          ))}
-        </div>
-      </section>
+          </div>
+          <TrackRowGrid trackIds={allTracks.slice(0, 6).map((t) => t.id)} />
+        </section>
+      )}
 
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Trending now</h2>
-          <button className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white">
-            Show all <ChevronRight className="h-3 w-3" />
-          </button>
-        </div>
-        <TrackRowGrid trackIds={allTracks.slice(0, 6).map((t) => t.id)} />
-      </section>
+      {recent.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white">Recently played</h2>
+            <button
+              onClick={() => setActiveView("recent")}
+              className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white"
+            >
+              See all <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+          <TrackRowGrid trackIds={recent.slice(0, 6)} />
+        </section>
+      )}
 
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Recently played</h2>
-          <button
-            onClick={() => setActiveView("recent")}
-            className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white"
-          >
-            See all <ChevronRight className="h-3 w-3" />
-          </button>
-        </div>
-        <TrackRowGrid trackIds={recent.slice(0, 6)} />
-      </section>
+      {artists.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-xl font-bold text-white">Artists</h2>
+          <CardRow
+            items={artists.map((a) => ({
+              id: a.id,
+              title: a.name,
+              subtitle: a.genre,
+              cover: a.cover,
+            }))}
+            onSelect={(id) => setActiveArtist(id)}
+          />
+        </section>
+      )}
 
-      {/* Jump back in — artists */}
-      <section>
-        <h2 className="mb-3 text-xl font-bold text-white">Artists you follow</h2>
-        <CardRow
-          items={artists.map((a) => ({
-            id: a.id,
-            title: a.name,
-            subtitle: a.genre,
-            cover: a.cover,
-          }))}
-          onSelect={(id) => setActiveArtist(id)}
+      {albums.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-xl font-bold text-white">Albums</h2>
+          <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
+            {albums.slice(0, 10).map((al) => (
+              <button
+                key={al.id}
+                onClick={() => setActiveAlbum(al.id)}
+                className="group text-left"
+              >
+                <div
+                  className="aspect-square w-full rounded-lg shadow-lg transition-transform group-hover:scale-[1.03]"
+                  style={{ background: al.cover }}
+                />
+                <div className="mt-2 truncate text-sm font-semibold text-white">{al.title}</div>
+                <div className="truncate text-xs text-zinc-400">{al.artistName}</div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ---------- Empty library state ----------
+
+function EmptyLibraryState({ onGoToLibrary }: { onGoToLibrary: () => void }) {
+  return (
+    <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+      <div
+        className="mb-6 flex h-24 w-24 items-center justify-center rounded-full"
+        style={{
+          backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+        }}
+      >
+        <Music4 className="size-12" style={{ color: "var(--accent)" }} aria-hidden />
+      </div>
+      <h1 className="text-3xl font-bold text-white">Your library is empty</h1>
+      <p className="mt-2 max-w-md text-sm text-zinc-400">
+        Import audio files from your device — single files or entire folders.
+        Folder imports become playlists automatically. Metadata is read from the
+        files themselves and your library persists across reloads.
+      </p>
+      <div className="mt-6">
+        <ImportLocalButton onImported={() => onGoToLibrary()} />
+      </div>
+      <div className="mt-8 grid w-full max-w-xl grid-cols-1 gap-3 @md:grid-cols-3">
+        <FeatureHint
+          icon={<FolderOpen className="size-5" />}
+          title="Folder → Playlist"
+          desc="Import a folder and we build a playlist from its tracks, ordered by track number."
         />
-      </section>
+        <FeatureHint
+          icon={<Sparkles className="size-5" />}
+          title="Real metadata"
+          desc="Title, artist, album, year and artwork are read from ID3v2 / Vorbis tags."
+        />
+        <FeatureHint
+          icon={<Music4 className="size-5" />}
+          title="Persistent"
+          desc="Files are stored locally (IndexedDB) and restored on your next visit."
+        />
+      </div>
+    </div>
+  );
+}
+
+function FeatureHint({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 text-left">
+      <div className="mb-2 text-[color:var(--accent)]" aria-hidden>
+        {icon}
+      </div>
+      <div className="text-sm font-semibold text-white">{title}</div>
+      <div className="mt-1 text-xs text-zinc-500">{desc}</div>
     </div>
   );
 }
@@ -463,17 +565,31 @@ function SearchView() {
             ))}
           </div>
         )}
-        {!q && (
+        {!q && allTracks.length === 0 && (
+          <div className="mt-6 rounded-lg border border-dashed border-white/10 p-8 text-center">
+            <p className="text-sm text-zinc-400">Your library is empty.</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Import audio files or a folder to start searching.
+            </p>
+            <div className="mt-4 flex justify-center">
+              <ImportLocalButton variant="compact" />
+            </div>
+          </div>
+        )}
+        {!q && allTracks.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            {["Synthwave", "Indie Folk", "Jazz", "Ambient", "Pop"].map((g) => (
-              <button
-                key={g}
-                onClick={() => setQ(g)}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-zinc-300 hover:bg-white/10"
-              >
-                {g}
-              </button>
-            ))}
+            {Array.from(new Set(allTracks.map((t) => t.genre)))
+              .filter(Boolean)
+              .slice(0, 6)
+              .map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setQ(g)}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-zinc-300 hover:bg-white/10"
+                >
+                  {g}
+                </button>
+              ))}
           </div>
         )}
       </div>
@@ -485,9 +601,9 @@ function SearchView() {
           ) : (
             <p className="text-sm text-zinc-500">No songs found for “{q}”.</p>
           )
-        ) : (
+        ) : allTracks.length > 0 ? (
           <TrackRowGrid trackIds={allTracks.slice(0, 6).map((t) => t.id)} />
-        ))}
+        ) : null)}
 
       {tab === "artists" && (
         <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
@@ -616,71 +732,123 @@ function LibraryView() {
       </div>
 
       {tab === "playlists" && (
-        <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
-          <button onClick={() => setActivePlaylist("liked")} className="group text-left">
-            <div className="aspect-square w-full overflow-hidden rounded-lg bg-gradient-to-br from-purple-600 to-[color:var(--accent)] shadow-lg transition-transform group-hover:scale-[1.02]">
-              <div className="flex h-full items-center justify-center">
-                <Heart className="h-10 w-10 text-white" fill="currentColor" />
-              </div>
+        playlists.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-white/10 p-10 text-center">
+            <ListMusic className="mx-auto size-8 text-zinc-500" />
+            <p className="mt-3 text-sm text-zinc-300">No playlists yet</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Import a folder to auto-create one, or click “New playlist”.
+            </p>
+            <div className="mt-4 flex justify-center gap-2">
+              <ImportLocalButton variant="compact" />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCreateOpen(true)}
+                className="gap-1.5 border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10"
+              >
+                <Plus className="h-4 w-4" /> New playlist
+              </Button>
             </div>
-            <div className="mt-2 text-sm font-semibold text-white">Liked Songs</div>
-            <div className="text-xs text-zinc-400">{likedTracks.length} songs</div>
-          </button>
-          {playlists.map((pl) => (
-            <button key={pl.id} onClick={() => setActivePlaylist(pl.id)} className="group text-left">
-              <div
-                className="aspect-square w-full overflow-hidden rounded-lg shadow-lg transition-transform group-hover:scale-[1.02]"
-                style={{ background: pl.cover }}
-              />
-              <div className="mt-2 truncate text-sm font-semibold text-white">{pl.title}</div>
-              <div className="truncate text-xs text-zinc-400">Playlist · {pl.curator}</div>
-            </button>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
+            {likedTracks.length > 0 && (
+              <button onClick={() => setActivePlaylist("liked")} className="group text-left">
+                <div className="aspect-square w-full overflow-hidden rounded-lg bg-gradient-to-br from-purple-600 to-[color:var(--accent)] shadow-lg transition-transform group-hover:scale-[1.02]">
+                  <div className="flex h-full items-center justify-center">
+                    <Heart className="h-10 w-10 text-white" fill="currentColor" />
+                  </div>
+                </div>
+                <div className="mt-2 text-sm font-semibold text-white">Liked Songs</div>
+                <div className="text-xs text-zinc-400">{likedTracks.length} songs</div>
+              </button>
+            )}
+            {playlists.map((pl) => (
+              <button key={pl.id} onClick={() => setActivePlaylist(pl.id)} className="group text-left">
+                <div
+                  className="aspect-square w-full overflow-hidden rounded-lg shadow-lg transition-transform group-hover:scale-[1.02]"
+                  style={{ background: pl.cover }}
+                />
+                <div className="mt-2 truncate text-sm font-semibold text-white">{pl.title}</div>
+                <div className="truncate text-xs text-zinc-400">Playlist · {pl.curator}</div>
+              </button>
+            ))}
+          </div>
+        )
       )}
 
       {tab === "artists" && (
-        <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
-          {artists.map((a) => (
-            <button key={a.id} onClick={() => setActiveArtist(a.id)} className="group text-left">
-              <div
-                className="aspect-square w-full rounded-full shadow-lg transition-transform group-hover:scale-[1.03]"
-                style={{ background: a.cover }}
-              />
-              <div className="mt-2 truncate text-sm font-semibold text-white">{a.name}</div>
-              <div className="truncate text-xs text-zinc-400">{a.genre}</div>
-            </button>
-          ))}
-        </div>
+        artists.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-white/10 p-10 text-center">
+            <Users className="mx-auto size-8 text-zinc-500" />
+            <p className="mt-3 text-sm text-zinc-300">No artists yet</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Import audio files with proper “Artist” tags to populate this view.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
+            {artists.map((a) => (
+              <button key={a.id} onClick={() => setActiveArtist(a.id)} className="group text-left">
+                <div
+                  className="aspect-square w-full rounded-full shadow-lg transition-transform group-hover:scale-[1.03]"
+                  style={{ background: a.cover }}
+                />
+                <div className="mt-2 truncate text-sm font-semibold text-white">{a.name}</div>
+                <div className="truncate text-xs text-zinc-400">{a.genre}</div>
+              </button>
+            ))}
+          </div>
+        )
       )}
 
       {tab === "albums" && (
-        <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
-          {albums.map((al) => (
-            <button key={al.id} onClick={() => setActiveAlbum(al.id)} className="group text-left">
-              <div
-                className="aspect-square w-full rounded-lg shadow-lg transition-transform group-hover:scale-[1.03]"
-                style={{ background: al.cover }}
-              />
-              <div className="mt-2 truncate text-sm font-semibold text-white">{al.title}</div>
-              <div className="truncate text-xs text-zinc-400">{al.artistName}</div>
-            </button>
-          ))}
-        </div>
+        albums.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-white/10 p-10 text-center">
+            <Disc3 className="mx-auto size-8 text-zinc-500" />
+            <p className="mt-3 text-sm text-zinc-300">No albums yet</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Import audio files with proper “Album” tags to populate this view.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 @md:grid-cols-3 @2xl:grid-cols-5">
+            {albums.map((al) => (
+              <button key={al.id} onClick={() => setActiveAlbum(al.id)} className="group text-left">
+                <div
+                  className="aspect-square w-full rounded-lg shadow-lg transition-transform group-hover:scale-[1.03]"
+                  style={{ background: al.cover }}
+                />
+                <div className="mt-2 truncate text-sm font-semibold text-white">{al.title}</div>
+                <div className="truncate text-xs text-zinc-400">{al.artistName}</div>
+              </button>
+            ))}
+          </div>
+        )
       )}
 
       {tab === "local" && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <ImportLocalButton />
             <span className="text-xs text-zinc-500">
-              Import audio files from your device — they stay in your browser session.
+              Import audio files or an entire folder. Files are parsed for real
+              metadata (artist, album, year, artwork) and stored locally so they
+              survive reloads.
             </span>
           </div>
           {localTracks.length > 0 ? (
             <TrackTable trackIds={localTracks.map((t) => t.id)} />
           ) : (
-            <p className="text-sm text-zinc-500">No local files imported yet.</p>
+            <div className="rounded-lg border border-dashed border-white/10 p-10 text-center">
+              <Library className="mx-auto size-8 text-zinc-500" />
+              <p className="mt-3 text-sm text-zinc-300">No files imported yet</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Use the “Files” button above to pick audio files, or “Folder”
+                to import a whole directory as a playlist.
+              </p>
+            </div>
           )}
         </div>
       )}
