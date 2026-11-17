@@ -64,15 +64,29 @@ jobs:
           NEXT_TELEMETRY_DISABLED: '1'
 
       - name: Smoke-check standalone server boots
+        env:
+          HOSTNAME: 127.0.0.1
+          PORT: '3000'
+          NEXT_TELEMETRY_DISABLED: '1'
         run: |
-          # Start the standalone server in the background, probe the home
-          # route, then kill it. A 200 means the build is loadable.
-          (bun .next/standalone/server.js &) || true
-          sleep 3
-          code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ || echo "000")
+          # Start the standalone server in the background, wait for it to
+          # accept connections, then probe the home route. A 200 means the
+          # build is loadable.
+          bun .next/standalone/server.js > /tmp/server.log 2>&1 &
+          SERVER_PID=$!
+          # Wait up to 30s for the port to open
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ | grep -q "200"; then
+              break
+            fi
+            sleep 1
+          done
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/ || echo "000")
           echo "HTTP ${code}"
+          echo "--- server.log ---"
+          cat /tmp/server.log || true
+          kill ${SERVER_PID} 2>/dev/null || true
           [ "$code" = "200" ] || { echo "Server did not return 200"; exit 1; }
-          pkill -f "standalone/server.js" 2>/dev/null || true
 
       - name: Upload build artifact
         if: success()
