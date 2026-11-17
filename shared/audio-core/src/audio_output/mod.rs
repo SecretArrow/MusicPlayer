@@ -171,7 +171,7 @@ fn build_f32_stream(
             // Keeps the signal bounded to [-1, 1] for the DAC.
             if gain > 1.0 {
                 for s in &mut out[..written] {
-                    *s = crate::effects::soft_clip(*s);
+                    *s = crate::effects::soft_clip(*s as f64) as f32;
                 }
             }
             // Underrun: fill the remainder with silence.
