@@ -42,6 +42,11 @@ jobs:
         with:
           bun-version: 1.1.0
 
+      - name: Setup Node.js (for standalone server smoke-test)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Cache node_modules
         uses: actions/cache@v4
         with:
@@ -72,7 +77,11 @@ jobs:
           # Start the standalone server in the background, wait for it to
           # accept connections, then probe the home route. A 200 means the
           # build is loadable.
-          bun .next/standalone/server.js > /tmp/server.log 2>&1 &
+          #
+          # We use Node.js, not Bun, because Next.js's start-server calls
+          # node:inspector which Bun has not implemented yet
+          # (https://github.com/oven-sh/bun/issues/2445).
+          node .next/standalone/server.js > /tmp/server.log 2>&1 &
           SERVER_PID=$!
           # Wait up to 30s for the port to open
           for i in $(seq 1 30); do
