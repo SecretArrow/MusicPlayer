@@ -1,0 +1,85 @@
+name: CI — Web UI (Next.js + TypeScript)
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'tsconfig.json'
+      - 'next.config.ts'
+      - 'tailwind.config.ts'
+      - 'postcss.config.mjs'
+      - '.github/workflows/ci-web.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'package.json'
+  workflow_dispatch:
+
+# Cancel in-flight runs for the same ref when a new push lands.
+concurrency:
+  group: ci-web-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-typecheck-build:
+    name: Lint + typecheck + production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.1.0
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: web-node_modules-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Lint (ESLint)
+        run: bun run lint
+        continue-on-error: true
+
+      - name: Typecheck (tsc --noEmit)
+        run: bunx tsc --noEmit
+
+      - name: Production build (next build)
+        run: bun run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+
+      - name: Smoke-check standalone server boots
+        run: |
+          # Start the standalone server in the background, probe the home
+          # route, then kill it. A 200 means the build is loadable.
+          (bun .next/standalone/server.js &) || true
+          sleep 3
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ || echo "000")
+          echo "HTTP ${code}"
+          [ "$code" = "200" ] || { echo "Server did not return 200"; exit 1; }
+          pkill -f "standalone/server.js" 2>/dev/null || true
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-standalone-${{ github.sha }}
+          path: |
+            .next/standalone
+            .next/static
+          retention-days: 7
