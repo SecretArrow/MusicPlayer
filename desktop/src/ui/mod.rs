@@ -42,6 +42,36 @@ pub enum UiAction {
     SetVolume,
     /// Start playback of a library track by id.
     PlayTrack(String),
+    // --- Equalizer ---
+    /// Toggle the EQ panel open/closed.
+    ToggleEqPanel,
+    /// Enable or disable the EQ.
+    ToggleEq,
+    /// Apply a named preset ("flat", "rock", …).
+    ApplyEqPreset(String),
+    /// Set an EQ band to a gain (dB). Payload: (band_index, gain_db).
+    SetEqBand(usize, f32),
+    // --- Import ---
+    /// Open the native folder picker; selected path scanned into the library.
+    ImportFolder,
+    // --- Queue CRUD ---
+    /// Add a track id to the end of the queue.
+    Enqueue(String),
+    /// Insert a track id as the next-to-play item.
+    PlayNext(String),
+    /// Remove the queue item at the given absolute index.
+    RemoveFromQueue(usize),
+    /// Jump to (play) the queue item with the given track id.
+    JumpToQueue(String),
+    /// Move queue item from `from` to `to` (absolute indices).
+    MoveQueueItem(usize, usize),
+    // --- Playlists ---
+    /// Create a new empty playlist with the given title.
+    CreatePlaylist(String),
+    /// Add a track id to a playlist.
+    AddToPlaylist { playlist_id: String, track_id: String },
+    /// Delete a playlist by id.
+    DeletePlaylist(String),
 }
 
 impl UiAction {
@@ -61,6 +91,19 @@ impl UiAction {
             UiAction::Seek => "seek",
             UiAction::SetVolume => "set_volume",
             UiAction::PlayTrack(_) => "play_track",
+            UiAction::ToggleEqPanel => "toggle_eq_panel",
+            UiAction::ToggleEq => "toggle_eq",
+            UiAction::ApplyEqPreset(_) => "apply_eq_preset",
+            UiAction::SetEqBand(_, _) => "set_eq_band",
+            UiAction::ImportFolder => "import_folder",
+            UiAction::Enqueue(_) => "enqueue",
+            UiAction::PlayNext(_) => "play_next",
+            UiAction::RemoveFromQueue(_) => "remove_from_queue",
+            UiAction::JumpToQueue(_) => "jump_to_queue",
+            UiAction::MoveQueueItem(_, _) => "move_queue_item",
+            UiAction::CreatePlaylist(_) => "create_playlist",
+            UiAction::AddToPlaylist { .. } => "add_to_playlist",
+            UiAction::DeletePlaylist(_) => "delete_playlist",
         }
     }
 }
@@ -80,6 +123,15 @@ impl HitRegion {
     /// Fraction of `x` inside the region rect, clamped to 0..1 (seek/volume).
     pub fn fraction(&self, x: f64) -> f64 {
         fraction_in_rect(x, self.rect)
+    }
+
+    /// Fraction of `y` inside the region rect, clamped to 0..1 (vertical
+    /// sliders such as the EQ band controls).
+    pub fn fraction_y(&self, y: f64) -> f64 {
+        if self.rect.height() <= 0.0 {
+            return 0.0;
+        }
+        ((y - self.rect.y0) / self.rect.height()).clamp(0.0, 1.0)
     }
 }
 
@@ -654,3 +706,37 @@ pub fn draw_theme_button(p: &mut painter::Painter, theme: &Theme, center: Point)
     );
     HitRegion::new(rect, UiAction::NextTheme)
 }
+
+/// Generic icon button that emits an arbitrary [UiAction]. Used for the
+/// EQ-panel toggle and the folder-import button (which don't have a View
+/// to navigate to, so they can't reuse [draw_icon_button]).
+pub fn draw_action_button(
+    p: &mut painter::Painter,
+    theme: &Theme,
+    center: Point,
+    icon: ActionIcon,
+    active: bool,
+    action: UiAction,
+) -> HitRegion {
+    let color = if active {
+        theme.accent_color()
+    } else {
+        theme.text_muted_color()
+    };
+    if active {
+        p.fill_circle(center.x, center.y, 13.0, p.overlay(0.10));
+    }
+    use painter::ActionIcon as PaintAction;
+    painter::draw_action_icon(p, icon as PaintAction, center.x, center.y, 16.0, color);
+    let rect = Rect::new(
+        center.x - 13.0,
+        center.y - 13.0,
+        center.x + 13.0,
+        center.y + 13.0,
+    );
+    HitRegion::new(rect, action)
+}
+
+/// Re-export of painter::ActionIcon so layouts can reference the icon set
+/// without needing to depend on the painter module directly.
+pub use painter::ActionIcon;

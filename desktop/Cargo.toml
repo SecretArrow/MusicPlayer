@@ -30,6 +30,10 @@ env_logger = "0.11"
 log = "0.4"
 # Shared mutable state
 parking_lot = "0.12"
+# Native file/folder picker for library import
+rfd = "0.15"
+# Bounded channels for scan progress + cross-thread communication
+crossbeam-channel = "0.5"
 
 # Resource embedding (assets bundled into the binary)
 include_dir = "0.7"

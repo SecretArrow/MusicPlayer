@@ -578,6 +578,57 @@ pub fn icon_heart(p: &mut Painter, cx: f64, cy: f64, s: f64, color: Color, fille
     }
 }
 
+/// Set of icons accepted by [draw_action_button] — buttons that emit
+/// arbitrary UiActions rather than navigating to a View. Mirrors the small
+/// subset of icons that show up in the toolbar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionIcon {
+    /// Equalizer panel toggle.
+    Sliders,
+    /// Folder import (library scan).
+    Folder,
+    /// Queue panel toggle.
+    Queue,
+    /// Generic plus (create playlist).
+    Plus,
+}
+
+/// Dispatch helper: draw the requested [ActionIcon] at the given position.
+pub fn draw_action_icon(
+    p: &mut Painter,
+    icon: ActionIcon,
+    cx: f64,
+    cy: f64,
+    s: f64,
+    color: Color,
+) {
+    match icon {
+        ActionIcon::Sliders => icon_sliders(p, cx, cy, s, color),
+        ActionIcon::Queue => icon_queue(p, cx, cy, s, color),
+        ActionIcon::Plus => icon_plus(p, cx, cy, s, color),
+        ActionIcon::Folder => icon_folder(p, cx, cy, s, color),
+    }
+}
+
+/// Folder glyph — a tabbed folder with a horizontal crease. Used for the
+/// import-folder button.
+pub fn icon_folder(p: &mut Painter, cx: f64, cy: f64, s: f64, color: Color) {
+    // Tab (top-left bump) + main body, drawn as a single rounded rect outline.
+    let body = RoundedRect::from_rect(
+        Rect::new(cx - 0.42 * s, cy - 0.22 * s, cx + 0.42 * s, cy + 0.30 * s),
+        0.08 * s,
+    );
+    p.stroke(&body, 0.07 * s, color);
+    // Tab on top-left
+    let mut tab = BezPath::new();
+    tab.move_to((cx - 0.42 * s, cy - 0.04 * s));
+    tab.line_to((cx - 0.42 * s, cy - 0.18 * s));
+    tab.line_to((cx - 0.14 * s, cy - 0.18 * s));
+    tab.line_to((cx - 0.08 * s, cy - 0.06 * s));
+    tab.line_to((cx - 0.42 * s, cy - 0.06 * s));
+    p.stroke(&tab, 0.07 * s, color);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

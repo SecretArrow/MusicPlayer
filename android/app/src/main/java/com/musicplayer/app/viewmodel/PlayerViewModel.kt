@@ -20,6 +20,8 @@ import com.musicplayer.app.data.Track
 import com.musicplayer.app.data.allTrackIds
 import com.musicplayer.app.data.findTrackById
 import com.musicplayer.app.media.MusicPlayerMediaService
+import com.musicplayer.app.media.NativeEngine
+import com.musicplayer.app.media.NativeEqMapper
 import com.musicplayer.app.ui.theme.ThemeManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -159,6 +161,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     init {
+        // Load the Rust audio-core cdylib. The player keeps using ExoPlayer
+        // for transport, but EQ/volume changes are mirrored to the Rust
+        // engine so the biquad math is identical to desktop.
+        NativeEngine.ensureInitialised()
         viewModelScope.launch {
             restorePersistedState()
             connectController()
@@ -404,6 +410,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val clamped = value.coerceIn(0f, 1f)
         _volume.value = clamped
         mediaController?.volume = clamped
+        // Mirror to the Rust engine so the EQ chain's pre-amp scales accordingly.
+        NativeEngine.player()?.setVolume(clamped)
     }
 
     fun setPlaybackSpeed(rate: Float) {
@@ -414,16 +422,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setCrossfade(enabled: Boolean) {
         _crossfade.value = enabled
+        // ExoPlayer has no built-in crossfade between MediaItems; this is a
+        // user preference persisted for future renderer integration.
     }
 
     fun setAudioQuality(quality: String) {
         _audioQuality.value = quality
+        // Quality is recorded as a preference. ExoPlayer adapts the
+        // selected MediaItem URL; the Rust engine's lowpass is applied
+        // when it is the active renderer (see MusicPlayerMediaService).
     }
 
     // ---------------------------------------------------------- equalizer
 
     fun setEqEnabled(enabled: Boolean) {
         _eq.value = _eq.value.copy(enabled = enabled)
+        pushEqToNative()
         persistEq()
     }
 
@@ -436,12 +450,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             it[index] = value.coerceIn(EqPresets.MIN_DB, EqPresets.MAX_DB)
         }
         _eq.value = current.copy(bands = bands, preset = "custom")
+        pushEqToNative()
         persistEq()
     }
 
     fun applyEqPreset(preset: String) {
         val bands = EqPresets.PRESETS[preset] ?: return
         _eq.value = _eq.value.copy(preset = preset, bands = bands)
+        pushEqToNative()
         persistEq()
     }
 
@@ -449,6 +465,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun applyEqPresetAndEnable(preset: String) {
         applyEqPreset(preset)
         if (!_eq.value.enabled) setEqEnabled(true)
+    }
+
+    /**
+     * Push the current EQ snapshot into the Rust audio-core engine. The
+     * ExoPlayer audio path is unaffected — ExoPlayer has no per-band EQ
+     * API — so EQ changes only take audible effect when the Rust engine
+     * is the active renderer (desktop parity path). ExoPlayer remains the
+     * source of truth for playback transport.
+     */
+    private fun pushEqToNative() {
+        val player = NativeEngine.player() ?: return
+        val rustEq = NativeEqMapper.toRust(_eq.value)
+        runCatching { player.setEq(rustEq) }
+            .onFailure { Log.w(TAG, "Rust setEq failed", it) }
     }
 
     private fun persistEq() {
@@ -513,6 +543,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _likedIds.value = snapshot.likedIds
         _playCounts.value = snapshot.playCounts
         _recentPlayed.value = snapshot.recentIds
+
+        // Push the restored EQ + volume to the Rust engine so the biquad
+        // chain matches what the user last saved.
+        pushEqToNative()
+        NativeEngine.player()?.setVolume(_volume.value)
 
         val state = _queue.value
         val restoredIndex = snapshot.lastTrackId

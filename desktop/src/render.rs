@@ -199,7 +199,9 @@ impl ApplicationHandler for VelloApp {
                     let (x, y) = *self.state.mouse_pos.read();
                     let zones = self.state.hit_zones.read().clone();
                     if let Some(region) = hit_test(&zones, x, y) {
-                        dispatch(&region.action, region.fraction(x), &self.state, event_loop);
+                        let x_frac = region.fraction(x);
+                        let y_frac = region.fraction_y(y);
+                        dispatch(&region.action, x_frac, y_frac, &self.state, event_loop);
                     }
                 }
             }
@@ -235,6 +237,7 @@ impl ApplicationHandler for VelloApp {
 fn dispatch(
     action: &UiAction,
     fraction: f64,
+    y_fraction: f64,
     state: &Arc<AppState>,
     _event_loop: &ActiveEventLoop,
 ) {
@@ -266,6 +269,7 @@ fn dispatch(
         UiAction::SetVolume => {
             *state.volume.write() = fraction.clamp(0.0, 1.0) as f32;
             *state.muted.write() = false;
+            state.apply_volume();
         }
         UiAction::ToggleShuffle => {
             let mut q = state.queue.write();
@@ -278,7 +282,10 @@ fn dispatch(
             let mut q = state.queue.write();
             q.cycle_repeat();
         }
-        UiAction::ToggleMute => *state.muted.write() = !*state.muted.read(),
+        UiAction::ToggleMute => {
+            *state.muted.write() = !*state.muted.read();
+            state.apply_volume();
+        }
         UiAction::NextTheme => *state.theme.write() = state.theme.read().next(),
         UiAction::PlayTrack(id) => {
             // Load this track + the visible library ordering as the queue.
@@ -288,6 +295,16 @@ fn dispatch(
             drop(lib);
             if let Some(path) = path {
                 state.queue.write().items = ordered;
+                // Find this track's index so the queue's `current` is in sync.
+                if let Some(idx) = state
+                    .queue
+                    .read()
+                    .items
+                    .iter()
+                    .position(|t| t == id)
+                {
+                    state.queue.write().current = idx;
+                }
                 if state.controller.current_track_id().as_deref() != Some(id.as_str()) {
                     state.controller.play_file(path, 0.0);
                 } else {
@@ -295,18 +312,113 @@ fn dispatch(
                 }
             }
         }
+        // --- Equalizer ---
+        UiAction::ToggleEqPanel => {
+            let mut open = state.show_eq.write();
+            *open = !*open;
+        }
+        UiAction::ToggleEq => {
+            let mut eq = state.eq.write();
+            eq.enabled = !eq.enabled;
+            let snapshot = eq.clone();
+            drop(eq);
+            state.apply_eq(&snapshot);
+        }
+        UiAction::ApplyEqPreset(name) => {
+            let mut eq = state.eq.write();
+            eq.apply_preset(name);
+            let snapshot = eq.clone();
+            drop(eq);
+            state.apply_eq(&snapshot);
+        }
+        UiAction::SetEqBand(idx, _placeholder) => {
+            // `y_fraction` represents the click position along the slider's
+            // vertical axis (0 = top, 1 = bottom). The UI lays the slider with
+            // +12 dB at the top and -12 dB at the bottom, so gain = 12 - frac*24.
+            let gain_db = (12.0 - y_fraction.clamp(0.0, 1.0) * 24.0) as f32;
+            let mut eq = state.eq.write();
+            eq.set_band(*idx, gain_db);
+            eq.preset = "custom".to_string();
+            let snapshot = eq.clone();
+            drop(eq);
+            state.apply_eq(&snapshot);
+        }
+        // --- Import folder ---
+        UiAction::ImportFolder => {
+            // Spawn the native folder picker on a background thread (rfd
+            // blocks the calling thread). On selection, scan the directory
+            // tree into the shared library on another thread so the UI
+            // thread is never blocked.
+            let lib = state.library.clone();
+            std::thread::spawn(move || {
+                let folder = rfd::FileDialog::new()
+                    .set_title("Import audio folder")
+                    .pick_folder();
+                if let Some(path) = folder {
+                    std::thread::spawn(move || {
+                        let (tx, _rx) =
+                            crossbeam_channel::bounded::<audio_core::ScanProgress>(64);
+                        let mut guard = lib.write();
+                        match audio_core::library::scan_dir_into(path, &mut guard, &tx) {
+                            Ok(n) => log::info!("imported {n} tracks into library"),
+                            Err(e) => log::error!("library import failed: {e}"),
+                        }
+                    });
+                }
+            });
+        }
+        // --- Queue CRUD ---
+        UiAction::Enqueue(id) => {
+            state.queue.write().enqueue(id.clone());
+        }
+        UiAction::PlayNext(id) => {
+            state.queue.write().play_next(id.clone());
+        }
+        UiAction::RemoveFromQueue(idx) => {
+            state.queue.write().remove(*idx);
+        }
+        UiAction::JumpToQueue(track_id) => {
+            let mut q = state.queue.write();
+            if q.jump_to(track_id) {
+                let id = q.current_id().map(|s| s.to_string());
+                drop(q);
+                if let Some(id) = id {
+                    let lib = state.library.read();
+                    let path = lib.entries.get(&id).map(|e| e.path.clone());
+                    drop(lib);
+                    if let Some(path) = path {
+                        state.controller.play_file(path, 0.0);
+                    }
+                }
+            }
+        }
+        UiAction::MoveQueueItem(from, to) => {
+            state.queue.write().move_item(*from, *to);
+        }
+        // --- Playlists ---
+        UiAction::CreatePlaylist(title) => {
+            state.playlists.write().create(title.clone(), "#A855F7");
+        }
+        UiAction::AddToPlaylist { playlist_id, track_id } => {
+            state.playlists.write().add_track(playlist_id, track_id);
+        }
+        UiAction::DeletePlaylist(id) => {
+            state.playlists.write().delete(id);
+        }
     }
 }
 
 fn handle_shortcut(code: KeyCode, state: &Arc<AppState>, _event_loop: &ActiveEventLoop) {
     match code {
-        KeyCode::Space => dispatch(&UiAction::TogglePlay, 0.0, state, _event_loop),
-        KeyCode::ArrowRight => dispatch(&UiAction::Next, 0.0, state, _event_loop),
-        KeyCode::ArrowLeft => dispatch(&UiAction::Prev, 0.0, state, _event_loop),
-        KeyCode::KeyS => dispatch(&UiAction::ToggleShuffle, 0.0, state, _event_loop),
-        KeyCode::KeyR => dispatch(&UiAction::CycleRepeat, 0.0, state, _event_loop),
-        KeyCode::KeyM => dispatch(&UiAction::ToggleMute, 0.0, state, _event_loop),
-        KeyCode::KeyT => dispatch(&UiAction::NextTheme, 0.0, state, _event_loop),
+        KeyCode::Space => dispatch(&UiAction::TogglePlay, 0.0, 0.0, state, _event_loop),
+        KeyCode::ArrowRight => dispatch(&UiAction::Next, 0.0, 0.0, state, _event_loop),
+        KeyCode::ArrowLeft => dispatch(&UiAction::Prev, 0.0, 0.0, state, _event_loop),
+        KeyCode::KeyS => dispatch(&UiAction::ToggleShuffle, 0.0, 0.0, state, _event_loop),
+        KeyCode::KeyR => dispatch(&UiAction::CycleRepeat, 0.0, 0.0, state, _event_loop),
+        KeyCode::KeyM => dispatch(&UiAction::ToggleMute, 0.0, 0.0, state, _event_loop),
+        KeyCode::KeyT => dispatch(&UiAction::NextTheme, 0.0, 0.0, state, _event_loop),
+        KeyCode::KeyE => dispatch(&UiAction::ToggleEqPanel, 0.0, 0.0, state, _event_loop),
+        KeyCode::KeyI => dispatch(&UiAction::ImportFolder, 0.0, 0.0, state, _event_loop),
         KeyCode::Escape => *state.view.write() = View::Home,
         _ => {}
     }

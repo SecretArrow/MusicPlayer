@@ -109,23 +109,31 @@ fn main() {
 
     // Initialize the CPAL audio backend (feature "audio"; requires ALSA on Linux).
     // The stream is leaked internally by AudioOutput::new and runs for the
-    // whole process; dropping the returned handle does not stop playback.
+    // whole process; we keep the public handle so the UI can drive
+    // set_volume / set_muted / update_eq from any thread.
     #[cfg(feature = "audio")]
-    {
+    let audio_output: Option<Arc<audio_core::audio_output::AudioOutput>> = {
         match audio_core::audio_output::AudioOutput::new(controller.clone()) {
-            Ok(_audio) => {}
+            Ok(out) => Some(Arc::new(out)),
             Err(e) => {
                 log::error!("audio backend init failed: {e}");
+                None
             }
         }
-    }
+    };
     #[cfg(not(feature = "audio"))]
     {
         log::warn!("built without audio_output — playback will be silent");
     }
 
     // Initialize the app state.
-    let app_state = Arc::new(app::AppState::new(controller, queue, library));
+    let app_state = Arc::new(app::AppState::new(
+        controller,
+        queue,
+        library,
+        #[cfg(feature = "audio")]
+        audio_output,
+    ));
 
     // Winit 0.30: EventLoop<T> is generic; window creation happens in
     // ApplicationHandler::resumed via create_window (no WindowBuilder).

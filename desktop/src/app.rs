@@ -1,6 +1,6 @@
 //! App state — shared between the render thread and event handlers.
 
-use audio_core::PlaybackController;
+use audio_core::{PlaybackController, EqSettings};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -19,22 +19,31 @@ pub struct AppState {
     pub queue: SharedQueue,
     /// Scanned library (track metadata for display + path lookups).
     pub library: Arc<RwLock<Library>>,
+    /// Optional handle to the live CPAL output stream (None when built
+    /// without the `audio` feature). UI volume / mute / EQ changes are
+    /// pushed to this handle so they reach the audio thread.
+    #[cfg(feature = "audio")]
+    pub audio_output: Option<Arc<audio_core::audio_output::AudioOutput>>,
+    /// Playlist store (user-created playlists). Lazily populated; persists
+    /// only in-memory for the lifetime of the process for now.
+    pub playlists: Arc<RwLock<audio_core::PlaylistStore>>,
     pub theme: RwLock<Theme>,
     /// Current view: home / library / playlists / now playing.
     pub view: RwLock<View>,
-    /// Whether the EQ panel is open (panel rendering lands with Settings view).
-    #[allow(dead_code)]
+    /// Whether the EQ panel is open.
     pub show_eq: RwLock<bool>,
-    /// Whether the queue panel is open (panel rendering lands with Queue view).
-    #[allow(dead_code)]
+    /// Whether the queue panel is open.
     pub show_queue: RwLock<bool>,
     /// Logical window size (DPI-independent).
     pub window_size: RwLock<(f32, f32)>,
     /// DPI scale factor.
     pub scale: RwLock<f32>,
-    /// UI volume 0..1 (visual state; audio gain follows the backend).
+    /// UI volume 0..1 (visual state + pushed to audio backend on change).
     pub volume: RwLock<f32>,
     pub muted: RwLock<bool>,
+    /// EQ state (preset name, bands, preamp dB, enabled flag).
+    /// Pushed to controller + audio_output whenever it changes.
+    pub eq: RwLock<EqSettings>,
     /// Hit regions produced by the last `ui::render` — rebuilt every frame.
     pub hit_zones: RwLock<Vec<HitRegion>>,
     /// Last cursor position in window (physical) coordinates.
@@ -68,11 +77,16 @@ impl AppState {
         controller: Arc<PlaybackController>,
         queue: SharedQueue,
         library: Arc<RwLock<Library>>,
+        #[cfg(feature = "audio")] audio_output: Option<Arc<audio_core::audio_output::AudioOutput>>,
     ) -> Self {
-        Self {
+        let eq = EqSettings::default();
+        let s = Self {
             controller,
             queue,
             library,
+            #[cfg(feature = "audio")]
+            audio_output,
+            playlists: Arc::new(RwLock::new(audio_core::PlaylistStore::new())),
             theme: RwLock::new(Theme::default()),
             view: RwLock::new(View::default()),
             show_eq: RwLock::new(false),
@@ -81,10 +95,42 @@ impl AppState {
             scale: RwLock::new(1.0),
             volume: RwLock::new(0.8),
             muted: RwLock::new(false),
+            eq: RwLock::new(eq.clone()),
             hit_zones: RwLock::new(Vec::new()),
             mouse_pos: RwLock::new((0.0, 0.0)),
             mouse_down: RwLock::new(false),
             elapsed: RwLock::new(0.0),
+        };
+        // Apply initial volume + EQ to the audio backend.
+        s.apply_volume();
+        s.apply_eq(&eq);
+        s
+    }
+
+    /// Push current `volume` + `muted` state to the audio backend (if any).
+    /// Linear gain: muted → 0, else volume (0..1) so 1.0 = unity.
+    pub fn apply_volume(&self) {
+        #[cfg(feature = "audio")]
+        if let Some(out) = &self.audio_output {
+            let muted = *self.muted.read();
+            let vol = *self.volume.read();
+            out.set_muted(muted);
+            out.set_volume(if muted { 0.0 } else { vol });
+        }
+        // Without the audio feature we still keep the visual state for UI.
+        #[cfg(not(feature = "audio"))]
+        {
+            let _ = (self.volume.read(), self.muted.read());
+        }
+    }
+
+    /// Push EQ settings to the playback controller + audio output EQ chain.
+    /// `sample_rate` defaults to the engine rate when not known yet.
+    pub fn apply_eq(&self, settings: &EqSettings) {
+        self.controller.set_eq(settings.clone());
+        #[cfg(feature = "audio")]
+        if let Some(out) = &self.audio_output {
+            out.update_eq(settings, audio_core::ENGINE_SAMPLE_RATE as f64);
         }
     }
 }

@@ -5,7 +5,7 @@
 //! the left, a scrolling track list in the middle, and a persistent transport
 //! bar along the bottom.
 
-use vello::kurbo::{Point, Rect};
+use vello::kurbo::{Point, Rect, RoundedRect};
 use vello::peniko::Color;
 
 use crate::app::{AppState, View};
@@ -15,8 +15,8 @@ use crate::ui::painter::{
 };
 use crate::ui::text::{fmt_time, FontFamily};
 use crate::ui::{
-    draw_progress, draw_theme_button, draw_transport, draw_volume, metrics, now_playing, HitRegion,
-    TransportGeometry, UiAction,
+    draw_action_button, draw_progress, draw_theme_button, draw_transport, draw_volume, metrics,
+    now_playing, ActionIcon, HitRegion, TransportGeometry, UiAction,
 };
 use audio_core::LibraryEntry;
 
@@ -158,6 +158,28 @@ pub fn render(p: &mut Painter, t: &Theme, s: &AppState, w: f64, h: f64) -> Vec<H
     zones.push(draw_theme_button(p, t, Point::new(28.0, top - 30.0)));
     p.text(FontFamily::Sans, 52.0, top - 25.0, t.label, 12.0, muted);
 
+    // ---------- toolbar: EQ toggle + folder import ----------
+    // Stack the two action buttons below the theme button so they stay inside
+    // the sidebar and don't collide with the nav list.
+    let toolbar_y = top + 8.0;
+    let eq_active = *s.show_eq.read();
+    zones.push(draw_action_button(
+        p,
+        t,
+        Point::new(28.0, toolbar_y),
+        ActionIcon::Sliders,
+        eq_active,
+        UiAction::ToggleEqPanel,
+    ));
+    zones.push(draw_action_button(
+        p,
+        t,
+        Point::new(58.0, toolbar_y),
+        ActionIcon::Folder,
+        false,
+        UiAction::ImportFolder,
+    ));
+
     // ---------- main content: library track list ----------
     let list_x = sidebar_w + 32.0;
     let list_r = w - 32.0;
@@ -230,6 +252,134 @@ pub fn render(p: &mut Painter, t: &Theme, s: &AppState, w: f64, h: f64) -> Vec<H
         *s.volume.read() as f64,
         *s.muted.read(),
     ));
+
+    // ---------- EQ panel overlay (toggled from the sidebar) ----------
+    if *s.show_eq.read() {
+        zones.extend(draw_eq_overlay(p, t, s, w, h));
+    }
+
+    zones
+}
+
+/// Floating EQ panel — 10 vertical band sliders + preset label + enable
+/// toggle. Rendered as an overlay above the main content when `show_eq` is on.
+fn draw_eq_overlay(
+    p: &mut Painter,
+    t: &Theme,
+    s: &AppState,
+    w: f64,
+    _h: f64,
+) -> Vec<HitRegion> {
+    use crate::ui::ActionIcon;
+    use audio_core::effects::preset_names;
+
+    let mut zones = Vec::new();
+    // Panel occupies the right-hand third of the screen, full content height.
+    let panel_w = 360.0_f64.min(w - 40.0);
+    let panel_x = w - panel_w - 16.0;
+    let panel_y = 60.0;
+    let panel_h = 380.0_f64.min(_h - 80.0);
+    let panel = Rect::new(panel_x, panel_y, panel_x + panel_w, panel_y + panel_h);
+    let bg = with_alpha(t.surface_color(), 0.97);
+    p.fill_rrect(panel, 14.0, bg);
+    let panel_stroke = RoundedRect::from_rect(panel, 14.0);
+    p.stroke(&panel_stroke, 1.0, t.border_color());
+
+    let eq = s.eq.read();
+    let text = t.text_color();
+    let muted = t.text_muted_color();
+    let accent = t.accent_color();
+
+    // Header: title + enable toggle
+    p.text(FontFamily::SansBold, panel_x + 20.0, panel_y + 24.0, "Equalizer", 18.0, text);
+    let preset_label = if eq.enabled { eq.preset.clone() } else { "Off".to_string() };
+    p.text(
+        FontFamily::Sans,
+        panel_x + panel_w - 20.0,
+        panel_y + 26.0,
+        &preset_label,
+        12.0,
+        if eq.enabled { accent } else { muted },
+    );
+
+    // Enable toggle hit zone (top-right corner of header)
+    let toggle_rect = Rect::new(
+        panel_x + panel_w - 44.0,
+        panel_y + 18.0,
+        panel_x + panel_w - 20.0,
+        panel_y + 38.0,
+    );
+    zones.push(HitRegion::new(toggle_rect, UiAction::ToggleEq));
+
+    // 10 vertical sliders
+    let slider_y0 = panel_y + 70.0;
+    let slider_y1 = panel_y + panel_h - 70.0;
+    let slider_h = slider_y1 - slider_y0;
+    let slider_area_x0 = panel_x + 28.0;
+    let slider_area_x1 = panel_x + panel_w - 28.0;
+    let slider_count = 10usize;
+    let step = (slider_area_x1 - slider_area_x0) / (slider_count - 1) as f64;
+    let freqs = audio_core::EQ_FREQS;
+    for (i, freq) in freqs.iter().enumerate() {
+        let cx = slider_area_x0 + step * i as f64;
+        let gain_db = eq.bands[i] as f64;
+        // Map gain_db (-12..+12) to vertical fill fraction (0..1): 0 dB → 0.5
+        let frac = ((gain_db + 12.0) / 24.0).clamp(0.0, 1.0);
+        // Track
+        p.fill_rect(
+            Rect::new(cx - 2.0, slider_y0, cx + 2.0, slider_y1),
+            t.border_color(),
+        );
+        // Active fill
+        let mid_y = slider_y0 + slider_h * (1.0 - frac);
+        let active_color = if eq.enabled { accent } else { muted };
+        p.fill_rect(
+            Rect::new(cx - 2.0, mid_y, cx + 2.0, slider_y0 + slider_h * 0.5),
+            active_color,
+        );
+        // Handle
+        p.fill_circle(cx, mid_y, 5.0, active_color);
+        // Frequency label below
+        let label = if *freq >= 1000.0 {
+            format!("{:.0}k", *freq / 1000.0)
+        } else {
+            format!("{}", freq)
+        };
+        p.text(FontFamily::Sans, cx - 12.0, slider_y1 + 8.0, &label, 10.0, muted);
+        // Hit zone — the click y within this rect determines the new gain.
+        // The dispatcher computes gain from `fraction` (1 - y_frac) so we only
+        // need to encode the band index here.
+        let hit = Rect::new(cx - 12.0, slider_y0 - 8.0, cx + 12.0, slider_y1 + 24.0);
+        zones.push(HitRegion::new(hit, UiAction::SetEqBand(i, 0.0)));
+    }
+
+    // Preset chips along the bottom of the panel
+    let chip_y = panel_y + panel_h - 36.0;
+    let presets = preset_names();
+    let chips_per_row = 4;
+    let chip_w = (panel_w - 40.0) / chips_per_row as f64;
+    for (i, name) in presets.iter().take(12).enumerate() {
+        let row = i / chips_per_row;
+        let col = i % chips_per_row;
+        let cx = panel_x + 20.0 + col as f64 * chip_w + chip_w / 2.0;
+        let cy = chip_y + row as f64 * 24.0;
+        let active = eq.preset == *name;
+        let color = if active { accent } else { muted };
+        let bg_chip = if active {
+            with_alpha(accent, 0.18)
+        } else {
+            with_alpha(t.surface_color(), 0.4)
+        };
+        let chip_rect = Rect::new(cx - chip_w / 2.0 + 4.0, cy - 9.0, cx + chip_w / 2.0 - 4.0, cy + 9.0);
+        p.fill_rrect(chip_rect, 9.0, bg_chip);
+        p.text(FontFamily::Sans, cx - 30.0, cy + 4.0, name, 10.0, color);
+        zones.push(HitRegion::new(chip_rect, UiAction::ApplyEqPreset(name.to_string())));
+    }
+
+    // Let layouts reuse the action-icon helper for the close affordance — but
+    // any of the SetEqBand hits above double as "click to change", so we leave
+    // the close to the same ToggleEqPanel button in the sidebar.
+    let _ = ActionIcon::Sliders; // suppress unused-import lint if any.
 
     zones
 }

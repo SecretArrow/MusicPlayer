@@ -48,6 +48,13 @@ pub enum OutputError {
 struct CallbackState {
     controller: Arc<PlaybackController>,
     eq_chain: Mutex<BiquadEq>,
+    /// Linear volume gain (0.0 = silent, 1.0 = unity, 2.0 = +6 dB).
+    /// Applied after EQ chain, before the samples leave the callback.
+    volume: Mutex<f32>,
+    /// True when the user muted output. When true, the callback writes zeros
+    /// instead of the drained samples (without advancing the read position so
+    /// playback resumes exactly where it left off on unmute).
+    muted: Mutex<bool>,
 }
 
 /// Public handle for a running CPAL output stream.
@@ -89,6 +96,8 @@ impl AudioOutput {
         let state = Arc::new(CallbackState {
             controller: controller.clone(),
             eq_chain: Mutex::new(eq),
+            volume: Mutex::new(1.0),
+            muted: Mutex::new(false),
         });
 
         let stream = build_f32_stream(&device, &supported, state.clone())?;
@@ -106,6 +115,29 @@ impl AudioOutput {
     pub fn update_eq(&self, settings: &crate::effects::EqSettings, sample_rate: f64) {
         *self.state.eq_chain.lock() = BiquadEq::from_settings(sample_rate, settings);
     }
+
+    /// Set the linear volume gain (0.0 = silent, 1.0 = unity, 2.0 = +6 dB).
+    /// The value is applied on the audio thread at the next callback, so there
+    /// are no audio glitches.
+    pub fn set_volume(&self, gain: f32) {
+        *self.state.volume.lock() = gain.clamp(0.0, 4.0);
+    }
+
+    /// Current linear volume gain.
+    pub fn volume(&self) -> f32 {
+        *self.state.volume.lock()
+    }
+
+    /// Mute or unmute output. When muted, the callback writes silence without
+    /// advancing the ring buffer read position, so playback resumes in-place.
+    pub fn set_muted(&self, muted: bool) {
+        *self.state.muted.lock() = muted;
+    }
+
+    /// Whether output is currently muted.
+    pub fn is_muted(&self) -> bool {
+        *self.state.muted.lock()
+    }
 }
 
 fn build_f32_stream(
@@ -117,9 +149,31 @@ fn build_f32_stream(
     let stream = device.build_output_stream(
         &config.clone().into(),
         move |out: &mut [f32], _info: &cpal::OutputCallbackInfo| {
+            // Mute path: write silence without draining the ring buffer, so
+            // playback resumes exactly where it left off on unmute.
+            if *state.muted.lock() {
+                for s in out.iter_mut() {
+                    *s = 0.0;
+                }
+                return;
+            }
+            let gain = *state.volume.lock();
             let written = state
                 .controller
                 .drain_samples_with_eq(out, &mut state.eq_chain.lock());
+            // Apply volume gain to the drained samples (in-place).
+            if gain != 1.0 {
+                for s in &mut out[..written] {
+                    *s *= gain;
+                }
+            }
+            // Soft-clip per-channel to prevent clipping when gain > unity.
+            // Keeps the signal bounded to [-1, 1] for the DAC.
+            if gain > 1.0 {
+                for s in &mut out[..written] {
+                    *s = crate::effects::soft_clip(*s);
+                }
+            }
             // Underrun: fill the remainder with silence.
             for s in &mut out[written..] {
                 *s = 0.0;
