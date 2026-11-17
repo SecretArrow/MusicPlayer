@@ -69,7 +69,10 @@ pub enum UiAction {
     /// Create a new empty playlist with the given title.
     CreatePlaylist(String),
     /// Add a track id to a playlist.
-    AddToPlaylist { playlist_id: String, track_id: String },
+    AddToPlaylist {
+        playlist_id: String,
+        track_id: String,
+    },
     /// Delete a playlist by id.
     DeletePlaylist(String),
 }

@@ -1,6 +1,6 @@
 //! App state — shared between the render thread and event handlers.
 
-use audio_core::{PlaybackController, EqSettings};
+use audio_core::{EqSettings, PlaybackController};
 use parking_lot::RwLock;
 use std::sync::Arc;
 

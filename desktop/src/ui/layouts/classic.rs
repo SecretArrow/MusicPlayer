@@ -263,13 +263,7 @@ pub fn render(p: &mut Painter, t: &Theme, s: &AppState, w: f64, h: f64) -> Vec<H
 
 /// Floating EQ panel — 10 vertical band sliders + preset label + enable
 /// toggle. Rendered as an overlay above the main content when `show_eq` is on.
-fn draw_eq_overlay(
-    p: &mut Painter,
-    t: &Theme,
-    s: &AppState,
-    w: f64,
-    _h: f64,
-) -> Vec<HitRegion> {
+fn draw_eq_overlay(p: &mut Painter, t: &Theme, s: &AppState, w: f64, _h: f64) -> Vec<HitRegion> {
     use crate::ui::ActionIcon;
     use audio_core::effects::preset_names;
 
@@ -291,8 +285,19 @@ fn draw_eq_overlay(
     let accent = t.accent_color();
 
     // Header: title + enable toggle
-    p.text(FontFamily::SansBold, panel_x + 20.0, panel_y + 24.0, "Equalizer", 18.0, text);
-    let preset_label = if eq.enabled { eq.preset.clone() } else { "Off".to_string() };
+    p.text(
+        FontFamily::SansBold,
+        panel_x + 20.0,
+        panel_y + 24.0,
+        "Equalizer",
+        18.0,
+        text,
+    );
+    let preset_label = if eq.enabled {
+        eq.preset.clone()
+    } else {
+        "Off".to_string()
+    };
     p.text(
         FontFamily::Sans,
         panel_x + panel_w - 20.0,
@@ -345,7 +350,14 @@ fn draw_eq_overlay(
         } else {
             format!("{}", freq)
         };
-        p.text(FontFamily::Sans, cx - 12.0, slider_y1 + 8.0, &label, 10.0, muted);
+        p.text(
+            FontFamily::Sans,
+            cx - 12.0,
+            slider_y1 + 8.0,
+            &label,
+            10.0,
+            muted,
+        );
         // Hit zone — the click y within this rect determines the new gain.
         // The dispatcher computes gain from `fraction` (1 - y_frac) so we only
         // need to encode the band index here.
@@ -370,10 +382,18 @@ fn draw_eq_overlay(
         } else {
             with_alpha(t.surface_color(), 0.4)
         };
-        let chip_rect = Rect::new(cx - chip_w / 2.0 + 4.0, cy - 9.0, cx + chip_w / 2.0 - 4.0, cy + 9.0);
+        let chip_rect = Rect::new(
+            cx - chip_w / 2.0 + 4.0,
+            cy - 9.0,
+            cx + chip_w / 2.0 - 4.0,
+            cy + 9.0,
+        );
         p.fill_rrect(chip_rect, 9.0, bg_chip);
         p.text(FontFamily::Sans, cx - 30.0, cy + 4.0, name, 10.0, color);
-        zones.push(HitRegion::new(chip_rect, UiAction::ApplyEqPreset(name.to_string())));
+        zones.push(HitRegion::new(
+            chip_rect,
+            UiAction::ApplyEqPreset(name.to_string()),
+        ));
     }
 
     // Let layouts reuse the action-icon helper for the close affordance — but

@@ -296,13 +296,7 @@ fn dispatch(
             if let Some(path) = path {
                 state.queue.write().items = ordered;
                 // Find this track's index so the queue's `current` is in sync.
-                if let Some(idx) = state
-                    .queue
-                    .read()
-                    .items
-                    .iter()
-                    .position(|t| t == id)
-                {
+                if let Some(idx) = state.queue.read().items.iter().position(|t| t == id) {
                     state.queue.write().current = idx;
                 }
                 if state.controller.current_track_id().as_deref() != Some(id.as_str()) {
@@ -356,8 +350,7 @@ fn dispatch(
                     .pick_folder();
                 if let Some(path) = folder {
                     std::thread::spawn(move || {
-                        let (tx, _rx) =
-                            crossbeam_channel::bounded::<audio_core::ScanProgress>(64);
+                        let (tx, _rx) = crossbeam_channel::bounded::<audio_core::ScanProgress>(64);
                         let mut guard = lib.write();
                         match audio_core::library::scan_dir_into(path, &mut guard, &tx) {
                             Ok(n) => log::info!("imported {n} tracks into library"),
@@ -399,7 +392,10 @@ fn dispatch(
         UiAction::CreatePlaylist(title) => {
             state.playlists.write().create(title.clone(), "#A855F7");
         }
-        UiAction::AddToPlaylist { playlist_id, track_id } => {
+        UiAction::AddToPlaylist {
+            playlist_id,
+            track_id,
+        } => {
             state.playlists.write().add_track(playlist_id, track_id);
         }
         UiAction::DeletePlaylist(id) => {

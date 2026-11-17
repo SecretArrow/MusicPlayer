@@ -594,14 +594,7 @@ pub enum ActionIcon {
 }
 
 /// Dispatch helper: draw the requested [ActionIcon] at the given position.
-pub fn draw_action_icon(
-    p: &mut Painter,
-    icon: ActionIcon,
-    cx: f64,
-    cy: f64,
-    s: f64,
-    color: Color,
-) {
+pub fn draw_action_icon(p: &mut Painter, icon: ActionIcon, cx: f64, cy: f64, s: f64, color: Color) {
     match icon {
         ActionIcon::Sliders => icon_sliders(p, cx, cy, s, color),
         ActionIcon::Queue => icon_queue(p, cx, cy, s, color),
