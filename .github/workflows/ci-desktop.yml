@@ -198,11 +198,13 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    # Publish on every tag push (versioned releases, e.g. v0.1.0) AND on every
-    # scheduled 30-minute tick (rolling `edge` release on main). The two paths
-    # never overlap: a scheduled run uses `refs/heads/main` and writes to the
-    # `edge` tag, while a tag push uses `refs/tags/v*` and writes to that tag.
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Publish on every push to main (auto-release per user request: "wajib
+    # rilis app binary setiap selesai dan auto push ke main repo"), every tag
+    # push (versioned releases, e.g. v0.1.0), every scheduled 30-minute tick,
+    # and manual dispatches. Non-tag runs all write to the rolling `edge`
+    # release tag (updated in place), so a push to main produces a fresh
+    # `edge` binary release with no manual step.
+    if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -358,14 +358,19 @@ jobs:
   release:
     name: Publish Android Release
     needs: build
-    # Publish on every tag push (versioned releases, e.g. v0.1.0) AND on every
-    # scheduled 30-minute tick (rolling `edge-android` release on main). For
-    # scheduled/manual runs we additionally require the signing secrets to be
-    # present (build.signing_ready == 'yes') so we never publish an empty
-    # edge release just because the keystore wasn't configured.
+    # Publish on every push to main (auto-release per user request: "wajib
+    # rilis app binary setiap selesai dan auto push ke main repo"), every tag
+    # push (versioned releases, e.g. v0.1.0), every scheduled 30-minute tick,
+    # and manual dispatches. Non-tag runs all write to the rolling
+    # `edge-android` release tag (updated in place), so a push to main
+    # produces a fresh signed APK + AAB release with no manual step.
+    # For push/schedule/manual runs we additionally require the signing
+    # secrets to be present (build.signing_ready == 'yes') so we never
+    # publish an unsigned or empty edge release just because the keystore
+    # wasn't configured.
     if: |
       (startsWith(github.ref, 'refs/tags/v') && true)
-      || ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.build.outputs.signing_ready == 'yes')
+      || ((github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.build.outputs.signing_ready == 'yes')
     runs-on: ubuntu-latest
     permissions:
       contents: write
