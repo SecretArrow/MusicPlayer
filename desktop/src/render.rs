@@ -339,16 +339,25 @@ fn dispatch(
         }
         // --- Import folder ---
         UiAction::ImportFolder => {
-            // Spawn the native folder picker on a background thread (rfd
-            // blocks the calling thread). On selection, scan the directory
-            // tree into the shared library on another thread so the UI
-            // thread is never blocked.
+            // Spawn the native folder picker on a background thread so the
+            // UI thread is never blocked. We use rfd's *async* API driven
+            // by pollster::block_on instead of the synchronous
+            // FileDialog::pick_folder(): the sync API requires a Win32
+            // message pump on the calling thread, and a plain
+            // std::thread::spawn has none, so on Windows the sync dialog
+            // never appears (the click silently does nothing — the
+            // "import folder button doesn't work" bug). AsyncFileDialog
+            // pumps its own dialog loop, so it works from any thread on
+            // Windows, macOS, and Linux without a runtime.
             let lib = state.library.clone();
             std::thread::spawn(move || {
-                let folder = rfd::FileDialog::new()
-                    .set_title("Import audio folder")
-                    .pick_folder();
-                if let Some(path) = folder {
+                let folder = pollster::block_on(
+                    rfd::AsyncFileDialog::new()
+                        .set_title("Import audio folder")
+                        .pick_folder(),
+                );
+                if let Some(handle) = folder {
+                    let path = handle.path().to_path_buf();
                     std::thread::spawn(move || {
                         let (tx, _rx) = crossbeam_channel::bounded::<audio_core::ScanProgress>(64);
                         let mut guard = lib.write();
