@@ -162,9 +162,17 @@ jobs:
       # doesn't fail the job, but drop the inner `|| true` so the step's
       # outcome still records the failure — the step below turns it into a
       # visible warning annotation.
+      #
+      # OPTIMIZATION: only run on tagged releases (refs/tags/v*) and manual
+      # dispatches. This step rebuilds the entire desktop crate for the
+      # x86_64-pc-windows-gnu target (separate from the msvc build that the
+      # windows-latest runner already produces and ships), costing ~130s of
+      # Linux runner time per run. Skipping it on push/schedule runs keeps
+      # the rolling edge loop fast; tagged releases still get the extra
+      # verification before a stable version is cut.
       - name: Wine smoke test (Windows binary on Linux runner)
         id: wine
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
         continue-on-error: true
         run: |
           sudo apt-get install -y wine

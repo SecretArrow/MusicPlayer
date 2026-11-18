@@ -207,6 +207,13 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Lint
+        # OPTIMIZATION: only run on PRs, tagged releases, and manual
+        # dispatches — skip on the 30-minute schedule and on plain pushes
+        # to main. Lint is ~85s per run and rarely surfaces new issues on
+        # a clean tree; running it on the rolling edge tick wastes runner
+        # time without catching anything new. PRs and tagged releases
+        # still gate on it before anything is published.
+        if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         working-directory: android
         run: ./gradlew lintDebug --continue || true
 
