@@ -42,7 +42,10 @@ include_dir = "0.7"
 # %APPDATA% on Windows, ~/Library/Application Support on macOS) so the
 # user's library index and playlists survive across app restarts.
 dirs = "5"
-# Serialize library + playlist store to JSON on disk.
+# Serialize library + playlist store to JSON on disk. `serde` itself
+# (with the `derive` feature) is needed because persist.rs references
+# the `Serialize` / `DeserializeOwned` trait bounds directly.
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [[bin]]
