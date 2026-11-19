@@ -40,10 +40,8 @@ const APP_CONFIG_DIR: &str = "musicplayer-desktop";
 pub fn config_dir() -> Option<PathBuf> {
     let base = dirs::config_dir()?;
     let dir = base.join(APP_CONFIG_DIR);
-    if !dir.exists() {
-        if fs::create_dir_all(&dir).is_err() {
-            return None;
-        }
+    if !dir.exists() && fs::create_dir_all(&dir).is_err() {
+        return None;
     }
     Some(dir)
 }
