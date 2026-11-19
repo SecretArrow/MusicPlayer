@@ -128,9 +128,7 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), String>
     let dir = path.parent().ok_or_else(|| "no parent dir".to_string())?;
     let tmp = dir.join(format!(
         ".{}.tmp",
-        path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("state")
+        path.file_name().and_then(|n| n.to_str()).unwrap_or("state")
     ));
     {
         let mut f = fs::File::create(&tmp).map_err(|e| e.to_string())?;

@@ -144,11 +144,18 @@ fn draw_playlist_list(
     // "+ New playlist" button at the top of the list area.
     let new_btn = Rect::new(list_x, list_top, list_r, list_top + 32.0);
     p.fill_rrect(new_btn, 8.0, with_alpha(accent, 0.15));
-    p.text(FontFamily::SansBold, list_x + 12.0, list_top + 20.0, "+ New playlist", 13.0, accent);
-    zones.push(HitRegion::new(new_btn, UiAction::CreatePlaylist(
-        // Auto-generated title; user can rename later.
-        format!("New Playlist {}", epoch_suffix()),
-    )));
+    p.text(
+        FontFamily::SansBold,
+        list_x + 12.0,
+        list_top + 20.0,
+        "+ New playlist",
+        13.0,
+        accent,
+    );
+    zones.push(HitRegion::new(
+        new_btn,
+        UiAction::CreatePlaylist(format!("New Playlist {}", epoch_suffix())),
+    ));
 
     let playlists: Vec<audio_core::Playlist> = {
         let store = s.playlists.read();
@@ -204,7 +211,14 @@ fn draw_playlist_list(
         let del_w = 28.0;
         let del = Rect::new(list_r - del_w, y + 6.0, list_r, y + row_h - 6.0);
         let del_cy = (del.y0 + del.y1) / 2.0 + 4.0;
-        p.text(FontFamily::SansBold, list_r - del_w + 9.0, del_cy, "✕", 13.0, muted);
+        p.text(
+            FontFamily::SansBold,
+            list_r - del_w + 9.0,
+            del_cy,
+            "✕",
+            13.0,
+            muted,
+        );
         zones.push(HitRegion::new(row, UiAction::SetView(View::NowPlaying)));
         zones.push(HitRegion::new(del, UiAction::DeletePlaylist(pl.id.clone())));
     }
@@ -289,10 +303,20 @@ pub fn render(p: &mut Painter, t: &Theme, s: &AppState, w: f64, h: f64) -> Vec<H
         View::Playlists => {
             let playlists_count = s.playlists.read().playlists.len();
             p.text(FontFamily::SansBold, list_x, 44.0, "Playlists", 22.0, text);
-            let sub = format!("{playlists_count} playlist{} · click + to create",
-                if playlists_count == 1 { "" } else { "s" });
+            let sub = format!(
+                "{playlists_count} playlist{} · click + to create",
+                if playlists_count == 1 { "" } else { "s" }
+            );
             p.text(FontFamily::Sans, list_x, 66.0, &sub, 12.0, muted);
-            zones.extend(draw_playlist_list(p, t, s, list_x, list_r, 92.0, top - 12.0));
+            zones.extend(draw_playlist_list(
+                p,
+                t,
+                s,
+                list_x,
+                list_r,
+                92.0,
+                top - 12.0,
+            ));
         }
         _ => {
             // Default: library track list.

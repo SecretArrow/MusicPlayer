@@ -448,30 +448,21 @@ fn dispatch(
             playlist_id,
             track_id,
         } => {
-            state
-                .playlists
-                .write()
-                .add_track(playlist_id, track_id);
+            state.playlists.write().add_track(playlist_id, track_id);
             state.persist_playlists();
         }
         UiAction::RemoveFromPlaylist {
             playlist_id,
             track_id,
         } => {
-            state
-                .playlists
-                .write()
-                .remove_track(playlist_id, track_id);
+            state.playlists.write().remove_track(playlist_id, track_id);
             state.persist_playlists();
         }
         UiAction::RenamePlaylist {
             playlist_id,
             new_title,
         } => {
-            state
-                .playlists
-                .write()
-                .rename(playlist_id, new_title);
+            state.playlists.write().rename(playlist_id, new_title);
             state.persist_playlists();
         }
         UiAction::ReorderPlaylist {
