@@ -333,13 +333,20 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
 
-      - name: Upload signed per-ABI APKs
-        if: ${{ env.SIGNING_READY == 'yes' }}
+      - name: Upload per-ABI APKs (signed when keystore present, else unsigned)
+        # Always upload release APKs (per user request: "selalu publish
+        # release aja"). When the keystore is configured the re-sign step
+        # produces `musicplayer-<abi>-signed.apk` (first glob). When it is
+        # not, the unsigned AGP output `app-<abi>-release-unsigned.apk`
+        # (second glob) is uploaded under the SAME artifact name so the
+        # downstream release glob always resolves. The two globs are
+        # mutually exclusive by filename, so no duplicates in either case.
         uses: actions/upload-artifact@v4
         with:
           name: musicplayer-android-signed-apks
           path: |
             android/app/build/outputs/apk/release/musicplayer-*-signed.apk
+            android/app/build/outputs/apk/release/app-*-release-unsigned.apk
           if-no-files-found: warn
 
       - name: Upload AAB
@@ -352,19 +359,19 @@ jobs:
   release:
     name: Publish Android Release
     needs: build
-    # Publish on every push to main (auto-release per user request: "hapus
-    # semua penjadwalan, kerjakan tugas langsung saja, rilis app setiap
-    # selesai"), every tag push (versioned releases, e.g. v0.1.0), and
-    # manual dispatches. Non-tag runs all write to the rolling
-    # `edge-android` release tag (updated in place), so a push to main
-    # produces a fresh signed APK + AAB release with no manual step and no
-    # timer. For push/manual runs we additionally require the signing
-    # secrets to be present (build.signing_ready == 'yes') so we never
-    # publish an unsigned or empty edge release just because the keystore
-    # wasn't configured.
-    if: |
-      (startsWith(github.ref, 'refs/tags/v') && true)
-      || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.build.outputs.signing_ready == 'yes')
+    # ALWAYS publish a release (per user request: "selalu publish release
+    # aja"). The only run type we skip is pull_request (publishing a release
+    # for an unmerged PR makes no sense and PRs from forks have no access to
+    # the release token). Every push to main publishes the rolling
+    # `edge-android` release; every tag push publishes a versioned release
+    # under the tag name; manual dispatches publish `edge-android`. The
+    # build job now always uploads per-ABI APKs (signed when the keystore
+    # is configured, unsigned otherwise) so the release always has APKs +
+    # AAB regardless of whether signing secrets are present.
+    # `softprops/action-gh-release` updates an existing release with the
+    # same tag in place, so `edge-android` is overwritten on every push
+    # to main with fresh APKs + AAB.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
