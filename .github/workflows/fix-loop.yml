@@ -183,7 +183,7 @@ jobs:
 
           ### Next step
           Add a new pattern to \`scripts/auto_fix.py\` covering this failure,
-          merge, and the loop will pick it up on the next scheduled run.
+          merge, and the loop will pick it up on the next push that fails.
 
           _Automatically opened by \`fix-loop.yml\`._
           EOF

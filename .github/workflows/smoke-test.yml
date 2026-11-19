@@ -5,13 +5,13 @@ name: Smoke Test — post-release validation + auto-fix trigger
 #    error, lalu rilis kembali, begitu terus menerus berulang sampai
 #    sempurna"
 #
-#   schedule (ci-desktop/ci-android) → release → smoke-test (this file)
+#   push to main (ci-desktop/ci-android) → release → smoke-test (this file)
 #                                                          │
 #                                            pass → done  │ fail → dispatch fix-loop.yml
 #                                                                       │
 #                                                  fix-loop applies patches → push → re-trigger ci
 #                                                                                          │
-#                                                                        ─── loop forever ────┘
+#                                                                        ─── loop on demand ────┘
 #
 # Triggers:
 #   workflow_run     Whenever ci-desktop or ci-android completes (success or

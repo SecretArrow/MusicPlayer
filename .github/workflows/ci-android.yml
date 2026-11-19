@@ -1,11 +1,10 @@
 name: CI — Android native app (Kotlin + Rust + Media3 + Android Auto)
 
 # ──────────────────────────────────────────────────────────────────────────
-# Auto-release loop (per user request: "auto release ... tambah auto uji
-# app/apk setelah rilis, lalu auto fix error, lalu rilis kembali, begitu
-# terus menerus berulang sampai sempurna").
+# Push-triggered auto-release loop (per user request: "hapus semua
+# penjadwalan, kerjakan tugas langsung saja, rilis app setiap selesai").
 #
-#   schedule (0,30 * * * *)
+#   push to main
 #       │
 #       ▼
 #   ci-android.yml ── build + sign split-per-ABI APK + AAB ── publish `edge-android`
@@ -25,11 +24,12 @@ name: CI — Android native app (Kotlin + Rust + Media3 + Android Auto)
 #                                       ▼
 #                                  re-triggers ci-android
 #                                       │
-#                                  ─── loop forever ───
+#                                  ─── loop on demand ───
 #
-# This file owns: schedule trigger + build + sign + edge-android release.
-# Companion files: smoke-test.yml, fix-loop.yml, scripts/smoke_test.py,
-#                  scripts/auto_fix.py.
+# This file owns: push trigger + build + sign + edge-android release.
+# There is no schedule (cron) trigger — every release is driven by a
+# real push. Companion files: smoke-test.yml, fix-loop.yml,
+# scripts/smoke_test.py, scripts/auto_fix.py.
 # ──────────────────────────────────────────────────────────────────────────
 
 on:
@@ -46,12 +46,6 @@ on:
       - 'android/**'
       - 'shared/audio-core/**'
       - '.github/workflows/ci-android.yml'
-  schedule:
-    # Auto-release rolling "edge" binaries every 30 minutes (the user's
-    # standing request: "auto release semua binary setiap akhir task /
-    # penjadwalan ... dengan penjadwalan setiap 30 menit"). Keeps signed
-    # split-per-ABI APKs + AAB published on a rolling edge release.
-    - cron: '0,30 * * * *'
   workflow_dispatch:
 
 # Cancel stale in-flight builds for the same ref (branch/tag) on new pushes.
@@ -69,8 +63,8 @@ jobs:
     name: Build APK & AAB (ARM64)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Surface signing readiness to the downstream `release` job: scheduled
-    # runs without the keystore secrets must NOT publish an empty release.
+    # Surface signing readiness to the downstream `release` job: runs
+    # without the keystore secrets must NOT publish an empty release.
     outputs:
       signing_ready: ${{ steps.detect_signing.outputs.signing_ready }}
     steps:
@@ -208,11 +202,11 @@ jobs:
 
       - name: Lint
         # OPTIMIZATION: only run on PRs, tagged releases, and manual
-        # dispatches — skip on the 30-minute schedule and on plain pushes
-        # to main. Lint is ~85s per run and rarely surfaces new issues on
-        # a clean tree; running it on the rolling edge tick wastes runner
-        # time without catching anything new. PRs and tagged releases
-        # still gate on it before anything is published.
+        # dispatches — skip on plain pushes to main. Lint is ~85s per run
+        # and rarely surfaces new issues on a clean tree; running it on
+        # the rolling edge tick wastes runner time without catching
+        # anything new. PRs and tagged releases still gate on it before
+        # anything is published.
         if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         working-directory: android
         run: ./gradlew lintDebug --continue || true
@@ -358,19 +352,19 @@ jobs:
   release:
     name: Publish Android Release
     needs: build
-    # Publish on every push to main (auto-release per user request: "wajib
-    # rilis app binary setiap selesai dan auto push ke main repo"), every tag
-    # push (versioned releases, e.g. v0.1.0), every scheduled 30-minute tick,
-    # and manual dispatches. Non-tag runs all write to the rolling
+    # Publish on every push to main (auto-release per user request: "hapus
+    # semua penjadwalan, kerjakan tugas langsung saja, rilis app setiap
+    # selesai"), every tag push (versioned releases, e.g. v0.1.0), and
+    # manual dispatches. Non-tag runs all write to the rolling
     # `edge-android` release tag (updated in place), so a push to main
-    # produces a fresh signed APK + AAB release with no manual step.
-    # For push/schedule/manual runs we additionally require the signing
+    # produces a fresh signed APK + AAB release with no manual step and no
+    # timer. For push/manual runs we additionally require the signing
     # secrets to be present (build.signing_ready == 'yes') so we never
     # publish an unsigned or empty edge release just because the keystore
     # wasn't configured.
     if: |
       (startsWith(github.ref, 'refs/tags/v') && true)
-      || ((github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.build.outputs.signing_ready == 'yes')
+      || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.build.outputs.signing_ready == 'yes')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -386,10 +380,10 @@ jobs:
         run: find artifacts -type f
 
       # Resolve release target: a tag push publishes under its own name
-      # (e.g. v0.1.0); a scheduled/manual run publishes the rolling
+      # (e.g. v0.1.0); a push-to-main / manual run publishes the rolling
       # `edge-android` release. `softprops/action-gh-release` updates an
       # existing release with the same tag in place, so `edge-android` is
-      # overwritten every 30 minutes with fresh signed APKs + AAB.
+      # overwritten on every push to main with fresh signed APKs + AAB.
       - name: Resolve release tag
         id: rel
         shell: bash
@@ -422,7 +416,7 @@ jobs:
             Media3 + Android Auto integration, and signed split-per-ABI APKs.
             Built from commit ${{ github.sha }}.
 
-            ${{ steps.rel.outputs.kind == 'edge' && format('This is a **rolling edge** build, refreshed every 30 minutes by the `schedule` trigger in `ci-android.yml`. The latest signed APKs and AAB always live here. Source: [`{0}`](https://github.com/SecretArrow/MusicPlayer/commit/{0})', github.sha) || 'Tagged release.' }}
+            ${{ steps.rel.outputs.kind == 'edge' && format('This is a **rolling edge** build, refreshed on every push to main by the `push` trigger in `ci-android.yml`. The latest signed APKs and AAB always live here. Source: [`{0}`](https://github.com/SecretArrow/MusicPlayer/commit/{0})', github.sha) || 'Tagged release.' }}
 
             ## Downloads
             - **arm64-v8a**: `musicplayer-arm64-v8a-signed.apk` — most modern phones

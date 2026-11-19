@@ -1,11 +1,10 @@
 name: CI — Desktop native app (Windows + Linux + macOS)
 
 # ──────────────────────────────────────────────────────────────────────────
-# Auto-release loop (per user request: "auto release ... tambah auto uji
-# app/apk setelah rilis, lalu auto fix error, lalu rilis kembali, begitu
-# terus menerus berulang sampai sempurna").
+# Push-triggered auto-release loop (per user request: "hapus semua
+# penjadwalan, kerjakan tugas langsung saja, rilis app setiap selesai").
 #
-#   schedule (0,30 * * * *)
+#   push to main
 #       │
 #       ▼
 #   ci-desktop.yml ── build + test ── publish rolling `edge` release
@@ -25,9 +24,10 @@ name: CI — Desktop native app (Windows + Linux + macOS)
 #                                       ▼
 #                                  re-triggers ci-desktop
 #                                       │
-#                                  ─── loop forever ───
+#                                  ─── loop on demand ───
 #
-# This file owns: schedule trigger + build + edge release.
+# This file owns: push trigger + build + edge release. There is no
+# schedule (cron) trigger — every release is driven by a real push.
 # Companion files: smoke-test.yml, fix-loop.yml, scripts/smoke_test.py,
 #                  scripts/auto_fix.py.
 # ──────────────────────────────────────────────────────────────────────────
@@ -46,18 +46,11 @@ on:
       - 'desktop/**'
       - 'shared/audio-core/**'
       - '.github/workflows/ci-desktop.yml'
-  schedule:
-    # Auto-release rolling "edge" binaries every 30 minutes (the user's
-    # standing request: "auto release semua binary setiap akhir task /
-    # penjadwalan ... dengan penjadwalan setiap 30 menit"). Cron here is
-    # the canonical way to make GitHub Actions self-trigger on a cadence
-    # without any external scheduler or token.
-    - cron: '0,30 * * * *'
   workflow_dispatch:
 
 # Cancel stale in-flight builds for the same ref (branch/tag) on new pushes.
-# Scheduled runs share ref `refs/heads/main`, so a fresh push or a new
-# schedule tick supersedes the previous run.
+# All runs here share ref `refs/heads/main` (push) or `refs/tags/v*` (tag),
+# so a fresh push supersedes the previous run.
 concurrency:
   group: ci-desktop-${{ github.ref }}
   cancel-in-progress: true
@@ -167,9 +160,9 @@ jobs:
       # dispatches. This step rebuilds the entire desktop crate for the
       # x86_64-pc-windows-gnu target (separate from the msvc build that the
       # windows-latest runner already produces and ships), costing ~130s of
-      # Linux runner time per run. Skipping it on push/schedule runs keeps
-      # the rolling edge loop fast; tagged releases still get the extra
-      # verification before a stable version is cut.
+      # Linux runner time per run. Skipping it on push runs keeps the rolling
+      # edge loop fast; tagged releases still get the extra verification
+      # before a stable version is cut.
       - name: Wine smoke test (Windows binary on Linux runner)
         id: wine
         if: matrix.os == 'ubuntu-latest' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
@@ -198,13 +191,13 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    # Publish on every push to main (auto-release per user request: "wajib
-    # rilis app binary setiap selesai dan auto push ke main repo"), every tag
-    # push (versioned releases, e.g. v0.1.0), every scheduled 30-minute tick,
-    # and manual dispatches. Non-tag runs all write to the rolling `edge`
+    # Publish on every push to main (auto-release per user request: "hapus
+    # semua penjadwalan, kerjakan tugas langsung saja, rilis app setiap
+    # selesai"), every tag push (versioned releases, e.g. v0.1.0), and
+    # manual dispatches. Non-tag runs all write to the rolling `edge`
     # release tag (updated in place), so a push to main produces a fresh
-    # `edge` binary release with no manual step.
-    if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # `edge` binary release with no manual step and no timer.
+    if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -238,9 +231,10 @@ jobs:
           exit $status
 
       # Resolve release target: a tag push publishes under its own name (e.g.
-      # v0.1.0); a scheduled/manual run publishes the rolling `edge` release.
-      # `softprops/action-gh-release` updates an existing release with the same
-      # tag in place, so the `edge` release is overwritten every 30 minutes.
+      # v0.1.0); a push-to-main / manual run publishes the rolling `edge`
+      # release. `softprops/action-gh-release` updates an existing release
+      # with the same tag in place, so the `edge` release is overwritten on
+      # every push to main.
       - name: Resolve release tag
         id: rel
         shell: bash
@@ -273,7 +267,7 @@ jobs:
             Native desktop music player for Windows, Linux, and macOS.
             Built from commit ${{ github.sha }}.
 
-            ${{ steps.rel.outputs.kind == 'edge' && format('This is a **rolling edge** build, refreshed every 30 minutes by the `schedule` trigger in `ci-desktop.yml`. The latest binaries always live here. Source: [`{0}`](https://github.com/SecretArrow/MusicPlayer/commit/{0})', github.sha) || 'Tagged release. See `docs/ARCHITECTURE.md` for technical details.' }}
+            ${{ steps.rel.outputs.kind == 'edge' && format('This is a **rolling edge** build, refreshed on every push to main by the `push` trigger in `ci-desktop.yml`. The latest binaries always live here. Source: [`{0}`](https://github.com/SecretArrow/MusicPlayer/commit/{0})', github.sha) || 'Tagged release. See `docs/ARCHITECTURE.md` for technical details.' }}
 
             ## Downloads
             - **Windows x64**: `musicplayer-desktop-x86_64-windows.zip` — extract and run `musicplayer-desktop.exe`
