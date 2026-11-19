@@ -415,6 +415,7 @@ jobs:
             artifacts/musicplayer-android-aab/*.aab
           draft: false
           prerelease: ${{ steps.rel.outputs.prerelease }}
+          make_latest: true
           generate_release_notes: false
           body: |
             # MusicPlayer Android ${{ steps.rel.outputs.tag }}

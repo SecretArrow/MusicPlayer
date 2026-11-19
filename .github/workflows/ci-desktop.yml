@@ -262,6 +262,7 @@ jobs:
             artifacts/musicplayer-desktop-aarch64-macos/*.tar.gz
           draft: false
           prerelease: ${{ steps.rel.outputs.prerelease }}
+          make_latest: true
           generate_release_notes: false
           body: |
             # MusicPlayer Desktop ${{ steps.rel.outputs.tag }}
