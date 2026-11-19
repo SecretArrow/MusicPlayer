@@ -24,8 +24,9 @@ pub struct AppState {
     /// pushed to this handle so they reach the audio thread.
     #[cfg(feature = "audio")]
     pub audio_output: Option<Arc<audio_core::audio_output::AudioOutput>>,
-    /// Playlist store (user-created playlists). Lazily populated; persists
-    /// only in-memory for the lifetime of the process for now.
+    /// Playlist store (user-created playlists). Persisted to disk on
+    /// every mutation via [`AppState::persist_playlists`] so the user's
+    /// playlists survive across app restarts.
     pub playlists: Arc<RwLock<audio_core::PlaylistStore>>,
     pub theme: RwLock<Theme>,
     /// Current view: home / library / playlists / now playing.
@@ -78,6 +79,7 @@ impl AppState {
         controller: Arc<PlaybackController>,
         queue: SharedQueue,
         library: Arc<RwLock<Library>>,
+        playlists: Arc<RwLock<audio_core::PlaylistStore>>,
         #[cfg(feature = "audio")] audio_output: Option<Arc<audio_core::audio_output::AudioOutput>>,
     ) -> Self {
         let eq = EqSettings::default();
@@ -87,7 +89,7 @@ impl AppState {
             library,
             #[cfg(feature = "audio")]
             audio_output,
-            playlists: Arc::new(RwLock::new(audio_core::PlaylistStore::new())),
+            playlists,
             theme: RwLock::new(Theme::default()),
             view: RwLock::new(View::default()),
             show_eq: RwLock::new(false),
@@ -106,6 +108,22 @@ impl AppState {
         s.apply_volume();
         s.apply_eq(&eq);
         s
+    }
+
+    /// Persist the current library index to disk. Best-effort; logs on
+    /// failure. Call after any mutation that changes which tracks the
+    /// user has in their library (import, delete, metadata edit).
+    pub fn persist_library(&self) {
+        let lib = self.library.read().clone();
+        crate::persist::save_library(&lib);
+    }
+
+    /// Persist the current playlist store to disk. Best-effort; logs on
+    /// failure. Call after any playlist mutation (create / delete /
+    /// rename / add / remove / reorder).
+    pub fn persist_playlists(&self) {
+        let store = self.playlists.read().clone();
+        crate::persist::save_playlists(&store);
     }
 
     /// Push current `volume` + `muted` state to the audio backend (if any).

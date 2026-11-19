@@ -65,6 +65,7 @@ mod tests {
             controller,
             queue,
             library,
+            Arc::new(parking_lot::RwLock::new(audio_core::PlaylistStore::new())),
             #[cfg(feature = "audio")]
             None,
         )

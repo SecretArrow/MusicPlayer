@@ -185,6 +185,35 @@ impl TrackQueue {
         Some(removed)
     }
 
+    /// Remove every entry with the given track id (deduped queue). The
+    /// currently-playing entry is skipped so a deletion can never pull
+    /// the rug out from under active playback. Returns how many were
+    /// removed. Useful when the user removes a track from the library:
+    /// any queue entries pointing at it become dangling and should be
+    /// cleaned up.
+    pub fn remove_track(&mut self, track_id: &str) -> usize {
+        let before = self.items.len();
+        // Walk from the back so removing doesn't shift unprocessed indices
+        // past us. Adjust `current` down for each removed entry that sat
+        // before it.
+        let mut removed_before_current = 0usize;
+        let mut i = self.items.len();
+        while i > 0 {
+            i -= 1;
+            if i == self.current {
+                continue;
+            }
+            if self.items[i] == track_id {
+                self.items.remove(i);
+                if i < self.current {
+                    removed_before_current += 1;
+                }
+            }
+        }
+        self.current = self.current.saturating_sub(removed_before_current);
+        before - self.items.len()
+    }
+
     /// Reorder: move `from` → `to`.
     pub fn move_item(&mut self, from: usize, to: usize) -> bool {
         if from == self.current

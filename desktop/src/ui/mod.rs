@@ -54,6 +54,19 @@ pub enum UiAction {
     // --- Import ---
     /// Open the native folder picker; selected path scanned into the library.
     ImportFolder,
+    // --- Library CRUD ---
+    /// Remove a track from the library index (the on-disk file is left
+    /// untouched — only the cached index entry is dropped).
+    RemoveFromLibrary(String),
+    /// Edit editable metadata of a library track.
+    EditTrack {
+        id: String,
+        title: Option<String>,
+        artist: Option<String>,
+        album: Option<String>,
+        genre: Option<String>,
+        year: Option<u32>,
+    },
     // --- Queue CRUD ---
     /// Add a track id to the end of the queue.
     Enqueue(String),
@@ -72,6 +85,22 @@ pub enum UiAction {
     AddToPlaylist {
         playlist_id: String,
         track_id: String,
+    },
+    /// Remove a track from a playlist.
+    RemoveFromPlaylist {
+        playlist_id: String,
+        track_id: String,
+    },
+    /// Rename an existing playlist.
+    RenamePlaylist {
+        playlist_id: String,
+        new_title: String,
+    },
+    /// Reorder a track inside a playlist (from -> to absolute index).
+    ReorderPlaylist {
+        playlist_id: String,
+        from: usize,
+        to: usize,
     },
     /// Delete a playlist by id.
     DeletePlaylist(String),
@@ -99,6 +128,8 @@ impl UiAction {
             UiAction::ApplyEqPreset(_) => "apply_eq_preset",
             UiAction::SetEqBand(_, _) => "set_eq_band",
             UiAction::ImportFolder => "import_folder",
+            UiAction::RemoveFromLibrary(_) => "remove_from_library",
+            UiAction::EditTrack { .. } => "edit_track",
             UiAction::Enqueue(_) => "enqueue",
             UiAction::PlayNext(_) => "play_next",
             UiAction::RemoveFromQueue(_) => "remove_from_queue",
@@ -106,6 +137,9 @@ impl UiAction {
             UiAction::MoveQueueItem(_, _) => "move_queue_item",
             UiAction::CreatePlaylist(_) => "create_playlist",
             UiAction::AddToPlaylist { .. } => "add_to_playlist",
+            UiAction::RemoveFromPlaylist { .. } => "remove_from_playlist",
+            UiAction::RenamePlaylist { .. } => "rename_playlist",
+            UiAction::ReorderPlaylist { .. } => "reorder_playlist",
             UiAction::DeletePlaylist(_) => "delete_playlist",
         }
     }

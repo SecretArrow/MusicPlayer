@@ -365,9 +365,51 @@ fn dispatch(
                             Ok(n) => log::info!("imported {n} tracks into library"),
                             Err(e) => log::error!("library import failed: {e}"),
                         }
+                        // Persist the updated library index so the imported
+                        // tracks survive a restart. Snapshot under the write
+                        // lock, then drop it before saving (save_library
+                        // takes its own time and we don't want to hold the
+                        // RwLock across disk I/O).
+                        let snapshot = guard.clone();
+                        drop(guard);
+                        crate::persist::save_library(&snapshot);
                     });
                 }
             });
+        }
+        // --- Library CRUD ---
+        UiAction::RemoveFromLibrary(id) => {
+            state.library.write().remove(id);
+            // Drop the track from any playlist that references it, so
+            // playlists never point at a track the user removed.
+            {
+                let mut pl = state.playlists.write();
+                for p in pl.playlists.iter_mut() {
+                    p.remove(id);
+                }
+            }
+            // And from the queue, if present.
+            state.queue.write().remove_track(id);
+            state.persist_library();
+            state.persist_playlists();
+        }
+        UiAction::EditTrack {
+            id,
+            title,
+            artist,
+            album,
+            genre,
+            year,
+        } => {
+            state.library.write().edit_metadata(
+                id,
+                title.clone(),
+                artist.clone(),
+                album.clone(),
+                genre.clone(),
+                *year,
+            );
+            state.persist_library();
         }
         // --- Queue CRUD ---
         UiAction::Enqueue(id) => {
@@ -400,15 +442,51 @@ fn dispatch(
         // --- Playlists ---
         UiAction::CreatePlaylist(title) => {
             state.playlists.write().create(title.clone(), "#A855F7");
+            state.persist_playlists();
         }
         UiAction::AddToPlaylist {
             playlist_id,
             track_id,
         } => {
-            state.playlists.write().add_track(playlist_id, track_id);
+            state
+                .playlists
+                .write()
+                .add_track(playlist_id, track_id);
+            state.persist_playlists();
+        }
+        UiAction::RemoveFromPlaylist {
+            playlist_id,
+            track_id,
+        } => {
+            state
+                .playlists
+                .write()
+                .remove_track(playlist_id, track_id);
+            state.persist_playlists();
+        }
+        UiAction::RenamePlaylist {
+            playlist_id,
+            new_title,
+        } => {
+            state
+                .playlists
+                .write()
+                .rename(playlist_id, new_title);
+            state.persist_playlists();
+        }
+        UiAction::ReorderPlaylist {
+            playlist_id,
+            from,
+            to,
+        } => {
+            if let Some(p) = state.playlists.write().get_mut(playlist_id) {
+                p.move_track(*from, *to);
+            }
+            state.persist_playlists();
         }
         UiAction::DeletePlaylist(id) => {
             state.playlists.write().delete(id);
+            state.persist_playlists();
         }
     }
 }

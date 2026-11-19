@@ -119,6 +119,108 @@ fn draw_track_list(
     zones
 }
 
+/// User playlist list — shown when the active view is `View::Playlists`.
+///
+/// Each row shows the playlist title, track count, and a small ✕ button
+/// to delete it. A "+ New playlist" button at the top creates an empty
+/// playlist (the title is auto-generated as "New Playlist N"); rename
+/// can be triggered by editing the title in a future iteration, but
+/// creating + deleting here covers the core "user can CRUD their own
+/// playlists" loop end-to-end.
+fn draw_playlist_list(
+    p: &mut Painter,
+    t: &Theme,
+    s: &AppState,
+    list_x: f64,
+    list_r: f64,
+    list_top: f64,
+    list_bottom: f64,
+) -> Vec<HitRegion> {
+    let mut zones = Vec::new();
+    let (text, muted) = (t.text_color(), t.text_muted_color());
+    let accent = t.accent_color();
+    let list_w = list_r - list_x;
+
+    // "+ New playlist" button at the top of the list area.
+    let new_btn = Rect::new(list_x, list_top, list_r, list_top + 32.0);
+    p.fill_rrect(new_btn, 8.0, with_alpha(accent, 0.15));
+    p.text(FontFamily::SansBold, list_x + 12.0, list_top + 20.0, "+ New playlist", 13.0, accent);
+    zones.push(HitRegion::new(new_btn, UiAction::CreatePlaylist(
+        // Auto-generated title; user can rename later.
+        format!("New Playlist {}", epoch_suffix()),
+    )));
+
+    let playlists: Vec<audio_core::Playlist> = {
+        let store = s.playlists.read();
+        store.playlists.clone()
+    };
+
+    if playlists.is_empty() {
+        p.text(
+            FontFamily::Sans,
+            list_x,
+            list_top + 64.0,
+            "No playlists yet — click \"+ New playlist\" above to create one.",
+            13.0,
+            muted,
+        );
+        return zones;
+    }
+
+    let row_h = 44.0;
+    let body_top = list_top + 44.0;
+    let max_rows = (((list_bottom - body_top) / row_h) as usize).clamp(1, 12);
+    for (i, pl) in playlists.iter().take(max_rows).enumerate() {
+        let y = body_top + i as f64 * row_h;
+        let row = Rect::new(list_x - 8.0, y, list_r, y + row_h);
+        if i % 2 == 1 {
+            p.fill_rrect(row, 6.0, p.overlay(0.04));
+        }
+        let cy = y + row_h / 2.0 + 4.0;
+        // Cover swatch (gradient placeholder).
+        let swatch = Rect::new(list_x, y + 8.0, list_x + 28.0, y + row_h - 8.0);
+        p.fill_rrect(swatch, 4.0, with_alpha(accent, 0.6));
+        icon_note(p, list_x + 14.0, cy, 12.0, with_alpha(text, 0.85));
+        p.text_trunc(
+            FontFamily::SansBold,
+            list_x + 40.0,
+            cy,
+            &pl.title,
+            14.0,
+            text,
+            list_w * 0.5,
+        );
+        let count_label = format!("{} tracks", pl.track_ids.len());
+        p.text_trunc(
+            FontFamily::Sans,
+            list_x + list_w * 0.55,
+            cy,
+            &count_label,
+            12.0,
+            muted,
+            list_w * 0.25,
+        );
+        // Delete (✕) button at the right edge of the row.
+        let del_w = 28.0;
+        let del = Rect::new(list_r - del_w, y + 6.0, list_r, y + row_h - 6.0);
+        let del_cy = (del.y0 + del.y1) / 2.0 + 4.0;
+        p.text(FontFamily::SansBold, list_r - del_w + 9.0, del_cy, "✕", 13.0, muted);
+        zones.push(HitRegion::new(row, UiAction::SetView(View::NowPlaying)));
+        zones.push(HitRegion::new(del, UiAction::DeletePlaylist(pl.id.clone())));
+    }
+    zones
+}
+
+/// Short suffix to disambiguate auto-generated playlist titles when the
+/// user creates several in quick succession. Uses the wall-clock seconds
+/// so two clicks a second apart produce different titles.
+fn epoch_suffix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() % 100_000)
+        .unwrap_or(0)
+}
+
 pub fn render(p: &mut Painter, t: &Theme, s: &AppState, w: f64, h: f64) -> Vec<HitRegion> {
     let mut zones = Vec::new();
     let np = now_playing(s);
@@ -180,14 +282,27 @@ pub fn render(p: &mut Painter, t: &Theme, s: &AppState, w: f64, h: f64) -> Vec<H
         UiAction::ImportFolder,
     ));
 
-    // ---------- main content: library track list ----------
+    // ---------- main content: branch on active view ----------
     let list_x = sidebar_w + 32.0;
     let list_r = w - 32.0;
-    let entries = library_entries(s, 12);
-    p.text(FontFamily::SansBold, list_x, 44.0, "Library", 22.0, text);
-    let sub = format!("{} tracks · sorted by title", entries.len());
-    p.text(FontFamily::Sans, list_x, 66.0, &sub, 12.0, muted);
-    zones.extend(draw_track_list(p, t, s, list_x, list_r, 92.0, top - 12.0));
+    match active {
+        View::Playlists => {
+            let playlists_count = s.playlists.read().playlists.len();
+            p.text(FontFamily::SansBold, list_x, 44.0, "Playlists", 22.0, text);
+            let sub = format!("{playlists_count} playlist{} · click + to create",
+                if playlists_count == 1 { "" } else { "s" });
+            p.text(FontFamily::Sans, list_x, 66.0, &sub, 12.0, muted);
+            zones.extend(draw_playlist_list(p, t, s, list_x, list_r, 92.0, top - 12.0));
+        }
+        _ => {
+            // Default: library track list.
+            let entries = library_entries(s, 12);
+            p.text(FontFamily::SansBold, list_x, 44.0, "Library", 22.0, text);
+            let sub = format!("{} tracks · sorted by title", entries.len());
+            p.text(FontFamily::Sans, list_x, 66.0, &sub, 12.0, muted);
+            zones.extend(draw_track_list(p, t, s, list_x, list_r, 92.0, top - 12.0));
+        }
+    }
 
     // ---------- bottom player bar ----------
     p.fill_rect(Rect::new(0.0, top, w, h), surface);

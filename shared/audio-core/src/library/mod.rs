@@ -62,7 +62,7 @@ pub enum LibraryError {
 }
 
 /// A music library. Thread-safe.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Library {
     /// Entries keyed by `id`.
     pub entries: HashMap<String, LibraryEntry>,
@@ -95,6 +95,51 @@ impl Library {
     /// Lookup by file path.
     pub fn find_by_path(&self, path: &Path) -> Option<&LibraryEntry> {
         self.entries.values().find(|e| e.path == path)
+    }
+
+    /// Remove a track from the library by id. Also drops it from the
+    /// recent-ids, play-count and recently-played indexes so no stale
+    /// references linger after a user deletes a file from their library.
+    /// Returns the removed entry, or `None` if the id was unknown.
+    pub fn remove(&mut self, id: &str) -> Option<LibraryEntry> {
+        let removed = self.entries.remove(id)?;
+        self.recent_ids.retain(|i| i != id);
+        self.play_counts.remove(id);
+        self.recently_played.retain(|i| i != id);
+        Some(removed)
+    }
+
+    /// Update editable metadata (title / artist / album / genre / year) of
+    /// an existing track. The on-disk file is left untouched; only the
+    /// in-library view changes. Returns `false` if the id is unknown.
+    pub fn edit_metadata(
+        &mut self,
+        id: &str,
+        title: Option<String>,
+        artist: Option<String>,
+        album: Option<String>,
+        genre: Option<String>,
+        year: Option<u32>,
+    ) -> bool {
+        let Some(e) = self.entries.get_mut(id) else {
+            return false;
+        };
+        if let Some(t) = title {
+            e.title = t;
+        }
+        if let Some(a) = artist {
+            e.artist = a;
+        }
+        if let Some(a) = album {
+            e.album = a;
+        }
+        if let Some(g) = genre {
+            e.genre = g;
+        }
+        if let Some(y) = year {
+            e.year = y;
+        }
+        true
     }
 
     /// All entries, sorted by title.

@@ -7,6 +7,7 @@
 #![forbid(unsafe_op_in_unsafe_fn)]
 
 mod app;
+mod persist;
 mod render;
 mod theme;
 mod ui;
@@ -105,7 +106,18 @@ fn main() {
     // Build the audio engine + playback controller + shared library.
     let queue = audio_core::queue::shared_queue(Vec::new());
     let controller = audio_core::PlaybackController::new(queue.clone());
-    let library = Arc::new(parking_lot::RwLock::new(audio_core::Library::new()));
+
+    // Load saved state from disk so the user's library index and
+    // playlists survive across restarts. Missing files / first launch
+    // fall back to empty defaults — see `persist` module.
+    let saved_library = persist::load_library();
+    let saved_playlists = persist::load_playlists();
+    log::info!(
+        "loaded {} tracks and {} playlists from disk",
+        saved_library.entries.len(),
+        saved_playlists.playlists.len()
+    );
+    let library = Arc::new(parking_lot::RwLock::new(saved_library));
 
     // Initialize the CPAL audio backend (feature "audio"; requires ALSA on Linux).
     // The stream is leaked internally by AudioOutput::new and runs for the
@@ -131,6 +143,7 @@ fn main() {
         controller,
         queue,
         library,
+        Arc::new(parking_lot::RwLock::new(saved_playlists)),
         #[cfg(feature = "audio")]
         audio_output,
     ));

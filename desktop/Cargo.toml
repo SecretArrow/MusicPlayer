@@ -38,6 +38,13 @@ crossbeam-channel = "0.5"
 # Resource embedding (assets bundled into the binary)
 include_dir = "0.7"
 
+# Persistence — resolve the per-user config dir (XDG on Linux,
+# %APPDATA% on Windows, ~/Library/Application Support on macOS) so the
+# user's library index and playlists survive across app restarts.
+dirs = "5"
+# Serialize library + playlist store to JSON on disk.
+serde_json = "1"
+
 [[bin]]
 name = "musicplayer-desktop"
 path = "src/main.rs"

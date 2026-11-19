@@ -89,7 +89,7 @@ impl Playlist {
 }
 
 /// A store of playlists. Thread-safe (`Arc<RwLock<...>>`).
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct PlaylistStore {
     pub playlists: Vec<Playlist>,
 }
@@ -118,6 +118,16 @@ impl PlaylistStore {
         let before = self.playlists.len();
         self.playlists.retain(|p| p.id != id);
         self.playlists.len() < before
+    }
+
+    /// Rename an existing playlist. Returns `false` if the id is unknown.
+    pub fn rename(&mut self, id: &str, new_title: impl Into<String>) -> bool {
+        let Some(pl) = self.playlists.iter_mut().find(|p| p.id == id) else {
+            return false;
+        };
+        pl.title = new_title.into();
+        pl.touch();
+        true
     }
 
     pub fn add_track(&mut self, playlist_id: &str, track_id: &str) -> bool {
