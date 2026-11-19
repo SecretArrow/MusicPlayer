@@ -397,11 +397,9 @@ jobs:
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-            echo "prerelease=$( [[ "${GITHUB_REF_NAME}" == *-* ]] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "kind=versioned" >> "$GITHUB_OUTPUT"
           else
             echo "tag=edge-android" >> "$GITHUB_OUTPUT"
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
             echo "kind=edge" >> "$GITHUB_OUTPUT"
           fi
 
@@ -414,7 +412,7 @@ jobs:
             artifacts/musicplayer-android-signed-apks/*.apk
             artifacts/musicplayer-android-aab/*.aab
           draft: false
-          prerelease: ${{ steps.rel.outputs.prerelease }}
+          prerelease: false
           make_latest: true
           generate_release_notes: false
           body: |

@@ -243,11 +243,9 @@ jobs:
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-            echo "prerelease=$( [[ "${GITHUB_REF_NAME}" == *-* ]] && echo true || echo false )" >> "$GITHUB_OUTPUT"
             echo "kind=versioned" >> "$GITHUB_OUTPUT"
           else
             echo "tag=edge" >> "$GITHUB_OUTPUT"
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
             echo "kind=edge" >> "$GITHUB_OUTPUT"
           fi
 
@@ -261,7 +259,7 @@ jobs:
             artifacts/musicplayer-desktop-x86_64-linux/*.tar.gz
             artifacts/musicplayer-desktop-aarch64-macos/*.tar.gz
           draft: false
-          prerelease: ${{ steps.rel.outputs.prerelease }}
+          prerelease: false
           make_latest: true
           generate_release_notes: false
           body: |
